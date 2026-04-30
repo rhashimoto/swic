@@ -12,6 +12,8 @@
     "@web/test-runner": "^0.20.2",
     "@web/test-runner-core": "^0.13.4",
     "esbuild": "^0.28.0",
+    "jasmine-core": "^6.2.0",
+    "typescript": "^6.0.3",
     "web-test-runner-jasmine": "^0.2.0"
   }
 }
