@@ -2,9 +2,11 @@
   "name": "swic",
   "packageManager": "yarn@4.14.1",
   "scripts": {
-    "start": "web-dev-server --node-resolve --watch"
+    "start": "web-dev-server --node-resolve --watch",
+    "build": "node esbuild.config.mjs"
   },
   "devDependencies": {
-    "@web/dev-server": "^0.4.6"
+    "@web/dev-server": "^0.4.6",
+    "esbuild": "^0.28.0"
   }
 }
