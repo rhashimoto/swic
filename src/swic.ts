@@ -1,6 +1,15 @@
 /// <reference lib="webworker" />
+import { buildPathMatcher as buildPathMatcher } from "./path";
+
 declare const self: ServiceWorkerGlobalScope;
 export {};
+
+const config: { match: string[] } = Object.assign(
+  { match: ['*.js', '!/**/node_modules/**'] },
+  JSON.parse(new URLSearchParams(self.location.search).get("config") || "{}")
+);
+
+const pathMatcher = buildPathMatcher(config.match);
 
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
@@ -13,6 +22,11 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 });
 
 self.addEventListener("fetch", (event: FetchEvent) => {
+  const requestUrl = new URL(event.request.url);
+  if (!pathMatcher(requestUrl.pathname)) {
+    return;
+  }
+  
 	event.respondWith(
 		(async () => {
 			const response = await fetch(event.request);
