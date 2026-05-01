@@ -10,6 +10,14 @@ export default /** @type {import("@web/test-runner").TestRunnerConfig} */ ({
     },
   },
   browserLogs: true,
+  filterBrowserLogs: ({ type, args }) => {
+    if (type === 'error' &&
+        args[0]?.includes("DEPRECATION: jasmine-core isn't an ES module")) {
+      return false;
+    }
+
+    return !['trace', 'debug'].includes(type);
+  },
   browserStartTimeout: 60_000,
   nodeResolve: true,
   files: ['./test/*.test.js'],
