@@ -2,7 +2,6 @@
 import { buildPathMatcher as buildPathMatcher } from "./path";
 
 declare const self: ServiceWorkerGlobalScope;
-export {};
 
 const config: { match: string[] } = Object.assign(
   { match: ['*.js', '!/**/node_modules/**'] },
