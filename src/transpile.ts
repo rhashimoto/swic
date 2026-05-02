@@ -56,8 +56,7 @@ export function babelPlugin(
   // This is the builder for the call that will be injected before
   // each statement.
   const makeStatementCall = template.statement(`
-    __swicState__.s[FILE_INDEX][STATEMENT_ID] =
-      (__swicState__.s[FILE_INDEX][STATEMENT_ID] ?? 0) + 1;
+    _swic_s[FILE_INDEX][STATEMENT_ID] = (_swic_s[FILE_INDEX][STATEMENT_ID] ?? 0) + 1;
     `, { placeholderWhitelist: new Set(['FILE_INDEX', 'STATEMENT_ID']) });
 
   return {
@@ -90,7 +89,7 @@ export function babelPlugin(
           const preambleString = preamble.toString()
             .replace('"createDB"', 'TODO')
           const makeProgramWrapper = template.statements(`
-            const __swicState__ = (${preambleString})(${sources});
+            const { s: _swic_s, f: _swic_f, b: _swic_b } = (${preambleString})(${sources});
             BODY
           `, { placeholderPattern: false, placeholderWhitelist: new Set(['BODY']) });
             path.node.body = makeProgramWrapper({
