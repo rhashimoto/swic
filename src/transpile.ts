@@ -1,8 +1,11 @@
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+import "@babel/standalone"
 import { packages } from "@babel/standalone";
 
 import { preamble } from "./injected.js";
 import { DecodedSourceMapXInput } from "@jridgewell/trace-mapping";
+
+const Babel = (globalThis as any).Babel as typeof import("@babel/standalone");
 
 interface FileLocation {
   line: number;
@@ -22,8 +25,29 @@ export interface CustomPluginOptions {
   statementMaps?: Map<string, FileRange[]>;
 };
 
-export async function transpile(encodedBody: ArrayBuffer) {
+export async function transpile(path: string, encodedBody: ArrayBuffer) {
+  // TODO: hash
+
   const source = new TextDecoder().decode(encodedBody);
+  const opts: CustomPluginOptions = {
+    sourceMap: undefined
+  };
+
+  const transpiled = Babel.transform(source, {
+    parserOpts: {
+      strictMode: true,
+      allowAwaitOutsideFunction: true,
+      sourceFilename: path, // used for AST node location
+    },
+    inputSourceMap: undefined,
+    sourceMaps: 'inline',
+    filename: path, // used for state and error messages
+    plugins: [[babelPlugin, opts]]
+  });
+
+  // TODO: Save to IndexedDB.
+
+  return transpiled.code!;
 }
 
 export function babelPlugin(
@@ -32,7 +56,8 @@ export function babelPlugin(
   // This is the builder for the call that will be injected before
   // each statement.
   const makeStatementCall = template.statement(`
-    __swicState__.s[FILE_INDEX][STATEMENT_ID]++;
+    __swicState__.s[FILE_INDEX][STATEMENT_ID] =
+      (__swicState__.s[FILE_INDEX][STATEMENT_ID] ?? 0) + 1;
     `, { placeholderWhitelist: new Set(['FILE_INDEX', 'STATEMENT_ID']) });
 
   return {

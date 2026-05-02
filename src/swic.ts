@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { buildPathMatcher as buildPathMatcher } from "./path";
+import { transpile } from "./transpile";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -21,9 +22,7 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 });
 
 self.addEventListener("fetch", (event: FetchEvent) => {
-  const requestUrl = new URL(event.request.url);
-
-  // 
+  // Answer ping requests.
   if (event.request.headers.get('x-swic') === 'ping') {
     return event.respondWith(new Response(null, {
       status: 200,
@@ -32,6 +31,8 @@ self.addEventListener("fetch", (event: FetchEvent) => {
     }));
   }
 
+  // Ignore other requests that don't match the configured patterns.
+  const requestUrl = new URL(event.request.url);
   if (!pathMatcher(requestUrl.pathname)) {
     return;
   }
@@ -44,10 +45,22 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       return response;
     }
 
-    const headers = new Headers(response.headers);
-    headers.set("x-swic-service-worker", "active");
+    const responseBytes = await response.arrayBuffer();
+    const transpiled = await transpile(requestUrl.pathname, responseBytes);
 
-    return new Response(response.body, {
+    // Remove headers that may be invalid after instrumentation.
+    const headers = new Headers(response.headers);
+    headers.delete('Content-Length');
+    headers.delete('Content-Encoding');
+    headers.delete('Content-Range');
+    headers.delete('ETag');
+    headers.delete('Last-Modified');
+    headers.delete('Digest');
+    headers.delete('Content-Digest');
+    headers.delete('Repr-Digest');
+    headers.delete('Content-MD5');
+
+    return new Response(transpiled, {
       status: response.status,
       statusText: response.statusText,
       headers,

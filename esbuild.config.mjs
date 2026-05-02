@@ -6,6 +6,8 @@ export const buildOptions = {
 	format: "esm",
 	outdir: "dist",
 	sourcemap: true,
+  sourcesContent: false,
+  treeShaking: false,
 	platform: "browser",
 	target: "es2022",
   logLevel: "info",

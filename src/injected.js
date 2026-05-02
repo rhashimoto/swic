@@ -61,13 +61,12 @@ export function preamble(sources) {
       }
     }
 
-    const dbPromise = createDB();
+    // const dbPromise = createDB();
     globalThis.addEventListener('swic-save', event => {
       const customEvent = /** @type {CustomEvent} */(event);
 
-      customEvent.detail.response = dbPromise.then(db => {
-
-      });
+    //    customEvent.detail.response = dbPromise.then(db => {
+    //   });
     });
   }
   return scriptState;
