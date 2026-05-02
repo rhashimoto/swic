@@ -12,20 +12,18 @@ describe("babelPlugin", () => {
 
     /** @type {import("../src/transpile").CustomPluginOptions} */
     const pluginOptions = {
-      mapPathToIndex: new Map(),
-      statementMap: [],
-      sourceMap: null
+      sourceMap: undefined
     };
 
     const transpiled = Babel.transform(source, {
       parserOpts: {
         strictMode: true,
         allowAwaitOutsideFunction: true,
-        sourceFilename: 'foo.js',
+        sourceFilename: '/foo.js', // used for AST node location
       },
       inputSourceMap: undefined,
       sourceMaps: 'inline',
-      filename: 'foo.js',
+      filename: '/foo.js', // used for error messages and state
       plugins: [[babelPlugin, pluginOptions]]
     });
     expect(transpiled.code).toBeDefined();
