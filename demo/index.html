@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>swic demo/debug</title>
+</head>
+<body>
+  <h1>swic demo/debug</h1>
+  <script type="module">
+    await navigator.serviceWorker.register('../swic.js').then(() => {
+      return navigator.serviceWorker.ready;
+    });
+
+    while (true) {
+      const response = await fetch(location.href, {
+        method: 'HEAD',
+        headers: { 'x-swic': 'ping' }
+      });
+      if (response.headers.get('x-swic') === 'pong') {
+        break;
+      }
+
+      console.log('Waiting for service worker...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    const worker = new Worker('./demo-worker.js', { type: 'module' });
+  </script>
+</body>
+</html>

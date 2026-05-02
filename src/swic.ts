@@ -22,27 +22,35 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 
 self.addEventListener("fetch", (event: FetchEvent) => {
   const requestUrl = new URL(event.request.url);
+
+  // 
+  if (event.request.headers.get('x-swic') === 'ping') {
+    return event.respondWith(new Response(null, {
+      status: 200,
+      statusText: 'OK',
+      headers: { 'x-swic': 'pong' }
+    }));
+  }
+
   if (!pathMatcher(requestUrl.pathname)) {
     return;
   }
   
-	event.respondWith(
-		(async () => {
-			const response = await fetch(event.request);
+  event.respondWith((async () => {
+    const response = await fetch(event.request);
 
-			// Opaque responses (e.g. some cross-origin requests) cannot be modified.
-			if (response.type === "opaque") {
-				return response;
-			}
+    // Opaque responses (e.g. some cross-origin requests) cannot be modified.
+    if (response.type === "opaque") {
+      return response;
+    }
 
-			const headers = new Headers(response.headers);
-			headers.set("x-swic-service-worker", "active");
+    const headers = new Headers(response.headers);
+    headers.set("x-swic-service-worker", "active");
 
-			return new Response(response.body, {
-				status: response.status,
-				statusText: response.statusText,
-				headers,
-			});
-		})(),
-	);
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
+  })());
 });
