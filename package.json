@@ -4,7 +4,7 @@
   "scripts": {
     "start": "web-dev-server --node-resolve --watch",
     "build": "rollup -c",
-    "watch": "node autobuild.mjs",
+    "watch": "rollup -c --watch",
     "test": "web-test-runner --config web-test-runner.config.mjs"
   },
   "devDependencies": {
