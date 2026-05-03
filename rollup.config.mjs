@@ -11,7 +11,12 @@ export default [{
   },
   plugins: [
     nodeResolve(), 
-    typescript()
+    typescript({
+      compilerOptions: {
+        target: 'es2023',
+        module: 'esnext',
+      }
+    })
   ],
   treeshake: false,
 }];
