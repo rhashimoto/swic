@@ -7,7 +7,16 @@
 <body>
   <h1>swic demo/debug</h1>
   <script type="module">
-    await navigator.serviceWorker.register('../swic.js').then(() => {
+    const url = new URL('/swic.js', location.origin);
+    url.searchParams.set('config', JSON.stringify({
+      match: [
+        '/demo/**/*.js',
+        '/src/**/*.jsmxs',
+        '!node_modules/**',
+      ]
+    }));
+
+    await navigator.serviceWorker.register(url, { type: 'module' }).then(() => {
       return navigator.serviceWorker.ready;
     });
 

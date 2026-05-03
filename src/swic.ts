@@ -4,9 +4,14 @@ import { transpile } from "./transpile";
 
 declare const self: ServiceWorkerGlobalScope;
 
+const DEFAULT_CONFIG = {
+  match: ['*.js', '!/**/node_modules/**']
+};
+
+// Load configuration from query parameter "config" as JSON.
 const config: { match: string[] } = Object.assign(
-  { match: ['*.js', '!/**/node_modules/**'] },
-  JSON.parse(new URLSearchParams(self.location.search).get("config") || "{}")
+  DEFAULT_CONFIG,
+  JSON.parse(new URLSearchParams(location.search).get("config") || "{}")
 );
 
 const pathMatcher = buildPathMatcher(config.match);
@@ -37,6 +42,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
     return;
   }
   
+  // Transpile matching requests.
   event.respondWith((async () => {
     const response = await fetch(event.request);
 
