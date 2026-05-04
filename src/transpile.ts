@@ -1,11 +1,18 @@
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
-import "@babel/standalone"
-import { packages } from "@babel/standalone";
-
+import * as MaybeBabel from "@babel/standalone";
 import { preamble } from "./injected.js";
-import { DecodedSourceMapXInput } from "@jridgewell/trace-mapping";
 
-const Babel = (globalThis as any).Babel as typeof import("@babel/standalone");
+// esbuild isn't preserving setting `globalThis.Babel` as a side effect.
+// Strangely, importing the namespace works to get types in the IDE, but
+// at runtime only `globalThis.Babel` works when unbundled, and only the
+// namespace import works when bundled with esbuild (rollup works better
+// but is slower and produces some warnings). The workaround is to check
+// both places for a valid Babel object.
+// https://github.com/evanw/esbuild/issues/4463#issuecomment-4367914768
+// @ts-ignore
+const Babel = (MaybeBabel?.transform ?
+  MaybeBabel :
+  (globalThis as any).Babel) as typeof MaybeBabel;
 
 interface FileLocation {
   line: number;
@@ -47,24 +54,22 @@ export async function transpile(path: string, encodedBody: ArrayBuffer) {
 
   // TODO: Save to IndexedDB.
 
-  return transpiled.code!;
+  return transpiled?.code;
 }
 
 export function babelPlugin(
-  { template, types: t }: typeof packages,
+  { template, types: t }: typeof MaybeBabel.packages,
   opts: CustomPluginOptions) {
   // This is the builder for the call that will be injected before
   // each statement.
   const makeStatementCall = template.statement(`
-    _swic_s[FILE_INDEX][STATEMENT_ID] = (_swic_s[FILE_INDEX][STATEMENT_ID] ?? 0) + 1;
-    `, { placeholderWhitelist: new Set(['FILE_INDEX', 'STATEMENT_ID']) });
-
+    _swic_s[%%fileIndex%%][%%statementIndex%%] =
+      (_swic_s[%%fileIndex%%][%%statementIndex%%] ?? 0) + 1;
+    `);
   return {
     visitor: {
       Program: {
-        enter(
-          path: babel.NodePath<babel.types.Program>,
-          state: babel.PluginPass) {
+        enter(path: any, state: any) {
           // Create the mapping from source file paths to their indices
           // in the script state.
           const opts = state.opts as CustomPluginOptions;
@@ -81,26 +86,22 @@ export function babelPlugin(
             new Map([...opts.mapPathToIndex.keys()].map(path => [path, []]));
         },
 
-        exit(
-          path: babel.NodePath<babel.types.Program>,
-          state: babel.PluginPass) {
+        exit(path: any, state: any) {
           const opts = state.opts as CustomPluginOptions;
           const sources = JSON.stringify([...opts.mapPathToIndex!.keys()]);
           const preambleString = preamble.toString()
             .replace('"createDB"', 'TODO')
           const makeProgramWrapper = template.statements(`
             const { s: _swic_s, f: _swic_f, b: _swic_b } = (${preambleString})(${sources});
-            BODY
-          `, { placeholderPattern: false, placeholderWhitelist: new Set(['BODY']) });
-            path.node.body = makeProgramWrapper({
-              BODY: path.node.body
-            });
+            %%body%%
+          `);
+          path.node.body = makeProgramWrapper({
+            body: path.node.body
+          });
         }
       },
 
-      Statement(
-        path: babel.NodePath<babel.types.Statement>,
-        state: babel.PluginPass) {
+      Statement(path: any, state: any) {
         // Skip statements that are not in the original source.
         if (!path.node.loc) return;
 
@@ -149,11 +150,11 @@ export function babelPlugin(
 
         // Inject the call to increment the statement count.
         const callExpression = makeStatementCall({
-          FILE_INDEX: t.numericLiteral(fileIndex),
-          STATEMENT_ID: t.numericLiteral(statementIndex),
+          fileIndex: t.numericLiteral(fileIndex),
+          statementIndex: t.numericLiteral(statementIndex),
         });
         path.insertBefore(callExpression);
       },
-    } as babel.Visitor
+    }
   };
 }
