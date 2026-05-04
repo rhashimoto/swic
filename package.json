@@ -4,7 +4,7 @@
   "scripts": {
     "start": "web-dev-server --node-resolve --watch",
     "build": "node esbuild.config.mjs",
-    "watch": "node autobuild.mjs",
+    "watch": "node esbuild-watch.config.mjs",
     "test": "web-test-runner --config web-test-runner.config.mjs"
   },
   "devDependencies": {
@@ -13,7 +13,6 @@
     "@web/dev-server-esbuild": "^1.0.5",
     "@web/test-runner": "^0.20.2",
     "@web/test-runner-core": "^0.13.4",
-    "chokidar": "^5.0.0",
     "esbuild": "^0.28.0",
     "jasmine-core": "^6.2.0",
     "typescript": "^6.0.3",
