@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { buildPathMatcher as buildPathMatcher } from "./path";
 import { transpile } from "./transpile";
+import { openDB } from "./injected";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -15,6 +16,7 @@ const config: { match: string[] } = Object.assign(
 );
 
 const pathMatcher = buildPathMatcher(config.match);
+const dbPromise = openDB();
 
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
@@ -59,7 +61,8 @@ self.addEventListener("fetch", (event: FetchEvent) => {
 
       // Instrument this script.
       const responseBytes = await response.arrayBuffer();
-      const transpiled = await transpile(requestUrl.pathname, responseBytes);
+      const responseText = new TextDecoder().decode(responseBytes);
+      const transpiled = await transpile(requestUrl.pathname, responseText);
 
       // Remove headers that may be invalid after instrumentation.
       const headers = new Headers(response.headers);
@@ -73,7 +76,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       headers.delete('Repr-Digest');
       headers.delete('Content-MD5');
 
-      return new Response(transpiled, {
+      return new Response(transpiled.code, {
         status: response.status,
         statusText: response.statusText,
         headers,

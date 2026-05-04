@@ -1,6 +1,8 @@
-import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 // @ts-ignore
-import * as MaybeBabel from "@babel/standalone/babel.min.js";
+import * as MaybeBabel from "@babel/standalone";
+// import * as MaybeBabel from "@babel/standalone/babel.min.js";
+import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+
 import { preamble } from "./injected.js";
 
 // esbuild isn't preserving setting `globalThis.Babel` as a side effect.
@@ -9,7 +11,7 @@ import { preamble } from "./injected.js";
 // namespace import works when bundled with esbuild (rollup works better
 // but is slower and produces some warnings). The workaround is to check
 // both places for a valid Babel object.
-// https://github.com/evanw/esbuild/issues/4463#issuecomment-4367914768
+// https://github.com/evanw/esbuild/issues/4463
 // @ts-ignore
 const Babel = (MaybeBabel?.transform ?
   MaybeBabel :
@@ -25,20 +27,36 @@ interface FileRange {
   end: FileLocation;
 };
 
-export interface CustomPluginOptions {
-  sourceMap?: TraceMap;
+interface StatementEntry extends FileRange {};
+interface BranchRange extends FileRange { skip?: true }; // always true if present
 
-  // Created and used internally.
-  mapPathToIndex?: Map<string, number>;
-  statementMaps?: Map<string, FileRange[]>;
+interface FnEntry {
+  name: string;
+  line: number;
+  loc: FileRange;
+  skip?: true; // always true if present
 };
 
-export async function transpile(path: string, encodedBody: ArrayBuffer) {
-  // TODO: hash
+interface BranchEntry {
+  line: number;
+  type: string;
+  locations: BranchRange[];
+};
 
-  const source = new TextDecoder().decode(encodedBody);
+export interface CustomPluginOptions {
+  path: string;
+  sourceMap?: TraceMap;
+
+  // Output by the plugin.
+  statementMaps?: Map<string, StatementEntry[]>;
+  fnMaps?: Map<string, FnEntry[]>;
+  branchMaps?: Map<string, BranchEntry[]>;
+};
+
+export async function transpile(path: string, source: string) {
   const opts: CustomPluginOptions = {
-    sourceMap: undefined
+    path,
+    sourceMap: undefined // TODO
   };
 
   const transpiled = Babel.transform(source, {
@@ -53,14 +71,26 @@ export async function transpile(path: string, encodedBody: ArrayBuffer) {
     plugins: [[babelPlugin, opts]]
   });
 
-  // TODO: Save to IndexedDB.
-
-  return transpiled?.code;
+  return {
+    code: transpiled?.code,
+    statementMaps: opts.statementMaps!,
+    fnMaps: opts.fnMaps!,
+    branchMaps: opts.branchMaps!
+  };
 }
 
 export function babelPlugin(
   { template, types: t }: typeof MaybeBabel.packages,
   opts: CustomPluginOptions) {
+  const mapPathToIndex: Map<string, number> = new Map();
+  if (opts.sourceMap) {
+    opts.sourceMap.sources.forEach((source, index) => {
+      mapPathToIndex.set(source!, index);
+    });
+  } else {
+    mapPathToIndex.set(opts.path, 0);
+  }
+
   // This is the builder for the call that will be injected before
   // each statement.
   const makeStatementCall = template.statement(`
@@ -71,25 +101,15 @@ export function babelPlugin(
     visitor: {
       Program: {
         enter(path: any, state: any) {
-          // Create the mapping from source file paths to their indices
-          // in the script state.
-          const opts = state.opts as CustomPluginOptions;
-          if (opts.sourceMap) {
-            opts.mapPathToIndex =
-              new Map(opts.sourceMap.sources.map((source, index) => [source!, index]));
-          } else {
-            opts.mapPathToIndex =
-              new Map([[path.node.loc!.filename!, 0]]);
-          }
-
           // Create "maps" (which are actually arrays) for each source file.
-          opts.statementMaps =
-            new Map([...opts.mapPathToIndex.keys()].map(path => [path, []]));
+          const filePaths = [...mapPathToIndex.keys()];
+          opts.statementMaps = new Map(filePaths.map(filePath => [filePath, []]));
+          opts.fnMaps = new Map(filePaths.map(filePath => [filePath, []]));
+          opts.branchMaps = new Map(filePaths.map(filePath => [filePath, []]));
         },
 
         exit(path: any, state: any) {
-          const opts = state.opts as CustomPluginOptions;
-          const sources = JSON.stringify([...opts.mapPathToIndex!.keys()]);
+          const sources = JSON.stringify([...mapPathToIndex!.keys()]);
           const preambleString = preamble.toString()
             .replace('"createDB"', 'TODO')
           const makeProgramWrapper = template.statements(`
@@ -104,7 +124,8 @@ export function babelPlugin(
 
       Statement(path: any, state: any) {
         // Skip statements that are not in the original source.
-        if (!path.node.loc) return;
+        const loc = path.node.loc;
+        if (!loc) return;
 
         // Skip non-executable or invalid insertion points.
         if (path.isBlockStatement() ||
@@ -129,10 +150,10 @@ export function babelPlugin(
         let statementIndex: number;
         if (sourceMap) {
           // Use the source map to find the original location of the statement.
-          const start = originalPositionFor(sourceMap, path.node.loc.start);
-          const end = originalPositionFor(sourceMap, path.node.loc.end);
+          const start = originalPositionFor(sourceMap, loc.start);
+          const end = originalPositionFor(sourceMap, loc.end);
 
-          fileIndex = opts.mapPathToIndex!.get(start.source!)!;
+          fileIndex = mapPathToIndex!.get(start.source!)!;
           statementIndex = opts.statementMaps!.get(start.source!)!.length;
           opts.statementMaps!.get(start.source!)!.push({
             start: { line: start.line!, column: start.column! },
@@ -141,11 +162,11 @@ export function babelPlugin(
         } else {
           // No source map, so just use the location in the transpiled file.
           fileIndex = 0;
-          statementIndex = opts.statementMaps!.get(path.node.loc.filename!)!.length;
+          statementIndex = opts.statementMaps!.get(opts.path)!.length;
 
-          opts.statementMaps!.get(path.node.loc.filename!)!.push({
-            start: { line: path.node.loc.start.line, column: path.node.loc.start.column },
-            end: { line: path.node.loc.end.line, column: path.node.loc.end.column }
+          opts.statementMaps!.get(opts.path)!.push({
+            start: { line: loc.start.line, column: loc.start.column },
+            end: { line: loc.end.line, column: loc.end.column }
           });
         }
 

@@ -6,8 +6,7 @@ describe("transpile", () => {
       console.log('Hello, world!');
     `;
 
-    const encodedBody = new TextEncoder().encode(source);
-    const transpiled = await transpile('/foo.js', encodedBody.buffer);
+    const transpiled = await transpile('/foo.js', source);
     expect(transpiled).toBeDefined();
   });
 });

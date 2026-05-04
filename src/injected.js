@@ -61,7 +61,7 @@ export function preamble(sources) {
       }
     }
 
-    // const dbPromise = createDB();
+    // const dbPromise = openDB();
     globalThis.addEventListener('swic-save', event => {
       const customEvent = /** @type {CustomEvent} */(event);
 
@@ -75,7 +75,7 @@ export function preamble(sources) {
 /**
  * @returns {Promise<IDBDatabase>}
  */
-export function createDB() {
+export function openDB() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('swic', 1);
     request.onupgradeneeded = event => {
@@ -84,7 +84,7 @@ export function createDB() {
       db.createObjectStore('sources');
       db.createObjectStore('counts');
     };
-    request.onsuccess = event => resolve(request.result);
-    request.onerror = event => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
 }
