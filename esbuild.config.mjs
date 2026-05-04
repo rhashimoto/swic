@@ -2,7 +2,7 @@ import { build } from "esbuild";
 
 export const buildOptions = {
 	entryPoints: ["src/swic.ts"],
-  inject: ["@babel/standalone"],
+  inject: ["@babel/standalone/babel.min.js"],
 	bundle: true,
 	format: "esm",
 	outdir: "dist",

@@ -1,5 +1,6 @@
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
-import * as MaybeBabel from "@babel/standalone";
+// @ts-ignore
+import * as MaybeBabel from "@babel/standalone/babel.min.js";
 import { preamble } from "./injected.js";
 
 // esbuild isn't preserving setting `globalThis.Babel` as a side effect.
