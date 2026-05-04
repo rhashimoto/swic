@@ -44,32 +44,46 @@ self.addEventListener("fetch", (event: FetchEvent) => {
   
   // Transpile matching requests.
   event.respondWith((async () => {
-    const response = await fetch(event.request);
+    try {
+      const response = await fetch(event.request);
+      if (!response.ok) {
+        return response;
+      }
 
-    // Opaque responses (e.g. some cross-origin requests) cannot be modified.
-    if (response.type === "opaque") {
-      return response;
+      // Ensure the response is JavaScript before trying to transpile it.
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('javascript')) {
+        console.warn(`Skipping ${requestUrl.pathname}: content-type is ${contentType}`);
+        return response;
+      }
+
+      // Instrument this script.
+      const responseBytes = await response.arrayBuffer();
+      const transpiled = await transpile(requestUrl.pathname, responseBytes);
+
+      // Remove headers that may be invalid after instrumentation.
+      const headers = new Headers(response.headers);
+      headers.delete('Content-Length');
+      headers.delete('Content-Encoding');
+      headers.delete('Content-Range');
+      headers.delete('ETag');
+      headers.delete('Last-Modified');
+      headers.delete('Digest');
+      headers.delete('Content-Digest');
+      headers.delete('Repr-Digest');
+      headers.delete('Content-MD5');
+
+      return new Response(transpiled, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    } catch (error) {
+      console.error(requestUrl.pathname, error);
+      return new Response(null, {
+        status: 500,
+        statusText: 'Internal Server Error'
+      });
     }
-
-    const responseBytes = await response.arrayBuffer();
-    const transpiled = await transpile(requestUrl.pathname, responseBytes);
-
-    // Remove headers that may be invalid after instrumentation.
-    const headers = new Headers(response.headers);
-    headers.delete('Content-Length');
-    headers.delete('Content-Encoding');
-    headers.delete('Content-Range');
-    headers.delete('ETag');
-    headers.delete('Last-Modified');
-    headers.delete('Digest');
-    headers.delete('Content-Digest');
-    headers.delete('Repr-Digest');
-    headers.delete('Content-MD5');
-
-    return new Response(transpiled, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
   })());
 });
