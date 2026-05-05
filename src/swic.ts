@@ -8,6 +8,7 @@ declare const self: ServiceWorkerGlobalScope;
 const DEFAULT_CONFIG = {
   match: ['*.js', '!/**/node_modules/**']
 };
+const CACHE_NAME = 'swic-cache-v1';
 
 // Load configuration from query parameter "config" as JSON.
 const config: { match: string[] } = Object.assign(
@@ -20,7 +21,25 @@ const dbPromise = openDB();
 
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
-	event.waitUntil(self.skipWaiting());
+	event.waitUntil(Promise.all([
+    self.skipWaiting(),
+    (async () => {
+      // Clear the cache.
+      const cache = await caches.open(CACHE_NAME);
+      await cache.keys().then(keys => Promise.all(keys.map(key => cache.delete(key))));
+
+      // Clear IndexedDB.
+      const db = await dbPromise;
+      const tx = db.transaction(['maps', 'counts'], 'readwrite');
+      tx.objectStore('maps').clear();
+      tx.objectStore('counts').clear();
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.commit();
+      });
+    })()
+  ]));
 });
 
 // Take control of existing pages as soon as this worker activates.
