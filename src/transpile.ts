@@ -17,27 +17,27 @@ const Babel = (MaybeBabel?.transform ?
   MaybeBabel :
   (globalThis as any).Babel) as typeof MaybeBabel;
 
-interface FileLocation {
+export interface FileLocation {
   line: number;
   column: number;
 };
 
-interface FileRange {
+export interface FileRange {
   start: FileLocation;
   end: FileLocation;
 };
 
-interface StatementEntry extends FileRange {};
+export interface StatementEntry extends FileRange {};
 interface BranchRange extends FileRange { skip?: true }; // always true if present
 
-interface FnEntry {
+export interface FnEntry {
   name: string;
   line: number;
   loc: FileRange;
   skip?: true; // always true if present
 };
 
-interface BranchEntry {
+export interface BranchEntry {
   line: number;
   type: string;
   locations: BranchRange[];

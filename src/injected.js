@@ -80,9 +80,8 @@ export function openDB() {
     const request = indexedDB.open('swic', 1);
     request.onupgradeneeded = event => {
       const db = request.result;
-      db.createObjectStore('files');
-      db.createObjectStore('sources');
-      db.createObjectStore('counts');
+      db.createObjectStore('maps', { keyPath: 'path' });
+      db.createObjectStore('counts', { keyPath: 'path' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);

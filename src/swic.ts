@@ -59,10 +59,28 @@ self.addEventListener("fetch", (event: FetchEvent) => {
         return response;
       }
 
+      // TODO: check cache for matching ETag
+
       // Instrument this script.
       const responseBytes = await response.arrayBuffer();
       const responseText = new TextDecoder().decode(responseBytes);
       const transpiled = await transpile(requestUrl.pathname, responseText);
+
+      // Persist coverage maps to IndexedDB.
+      const db = await dbPromise;
+      const tx = db.transaction('maps', 'readwrite');
+      const mapsStore = tx.objectStore('maps');
+      mapsStore.put({
+        path: requestUrl.pathname,
+        statementMaps: transpiled.statementMaps,
+        fnMaps: transpiled.fnMaps,
+        branchMaps: transpiled.branchMaps
+      });
+      await new Promise((resolve, reject) => {
+        tx.oncomplete = () => resolve(undefined);
+        tx.onerror = () => reject(tx.error);
+        tx.commit();
+      });
 
       // Remove headers that may be invalid after instrumentation.
       const headers = new Headers(response.headers);
