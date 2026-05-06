@@ -1,4 +1,5 @@
-console.log('Hello, world!');
+console.log(
+  'Hello, world!');
 if (true) {
   console.log('if branch');
 } else {

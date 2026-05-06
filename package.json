@@ -5,6 +5,7 @@
     "start": "web-dev-server --node-resolve --watch",
     "build": "node esbuild.config.mjs",
     "watch": "node esbuild-watch.config.mjs",
+    "html": "nyc report --reporter=html",
     "test": "web-test-runner --config web-test-runner.config.mjs"
   },
   "devDependencies": {
@@ -15,6 +16,7 @@
     "@web/test-runner-core": "^0.13.4",
     "esbuild": "^0.28.0",
     "jasmine-core": "^6.2.0",
+    "nyc": "^18.0.0",
     "typescript": "^6.0.3",
     "web-test-runner-jasmine": "^0.2.0"
   },

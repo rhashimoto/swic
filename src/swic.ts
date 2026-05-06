@@ -57,8 +57,49 @@ self.addEventListener("fetch", (event: FetchEvent) => {
     }));
   }
 
-  // Ignore other requests that don't match the configured patterns.
+  // Handle coverage report requests.
   const requestUrl = new URL(event.request.url);
+  if (requestUrl.searchParams.has('swic-coverage')) {
+    return event.respondWith((async () => {
+      const db = await dbPromise;
+      const tx = db.transaction(['maps', 'counts'], 'readonly');
+      const [maps, counts]: any[] = await Promise.all([
+        new Promise((resolve, reject) => {
+          const request = tx.objectStore('maps').getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        }),
+        new Promise((resolve, reject) => {
+          const request = tx.objectStore('counts').getAll();
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        })
+      ]);
+
+      const mapPathToMaps = new Map(maps.map((map: any) => [map.path, map]));
+      const entries = counts.map((count: any) => {
+        const map: any = mapPathToMaps.get(count.path);
+        const obj = {
+          path: count.path,
+          statementMap: cvtArrayToObject(map!.statementMap),
+          fnMap: cvtArrayToObject(map!.fnMap),
+          branchMap: cvtArrayToObject(map!.branchMap),
+          s: cvtArrayToObject(count.s),
+          f: cvtArrayToObject(count.f),
+          b: cvtArrayToObject(count.b)
+        };
+        return [count.path, obj];
+      });
+      const obj = Object.fromEntries(entries);
+      return new Response(JSON.stringify(obj), {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'Content-Type': 'application/json' }
+      });
+    })());
+  }
+
+  // Ignore other requests that don't match the configured patterns.
   if (!pathMatcher(requestUrl.pathname)) {
     return;
   }
@@ -83,7 +124,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       // Instrument this script.
       const responseBytes = await response.arrayBuffer();
       const responseText = new TextDecoder().decode(responseBytes);
-      const transpiled = await transpile(requestUrl.pathname, responseText);
+      const transpiled = await transpile(`.${requestUrl.pathname}`, responseText);
 
       // Persist coverage maps to IndexedDB.
       const db = await dbPromise;
@@ -129,3 +170,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
     }
   })());
 });
+
+function cvtArrayToObject<T>(a: Array<T>): { [key: number]: T } {
+  return Object.fromEntries(a.map((value, index) => [index + 1, value]));
+}
