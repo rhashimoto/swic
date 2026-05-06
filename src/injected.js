@@ -121,7 +121,10 @@ export function preamble(shapes) {
     // Save can be triggered either by a custom event or BroadcastChannel.
     globalThis.addEventListener('swic-save', event => {
       const customEvent = /** @type {CustomEvent} */(event);
-      customEvent.detail.response = saveCounts();
+      const result = saveCounts();
+      if (typeof customEvent.detail === 'object') {
+        customEvent.detail.response = result;
+      }
     });
     new BroadcastChannel('swic-save').addEventListener('message', () => {
       saveCounts();
