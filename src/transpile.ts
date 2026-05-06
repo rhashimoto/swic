@@ -43,14 +43,18 @@ export interface BranchEntry {
   locations: BranchRange[];
 };
 
+interface CoverageMapping {
+  statementMap: StatementEntry[];
+  fnMap: FnEntry[];
+  branchMap: BranchEntry[];
+}
+
 export interface CustomPluginOptions {
   path: string;
   sourceMap?: TraceMap;
 
   // Output by the plugin.
-  statementMaps?: Map<string, StatementEntry[]>;
-  fnMaps?: Map<string, FnEntry[]>;
-  branchMaps?: Map<string, BranchEntry[]>;
+  mapping?: Map<string, CoverageMapping>;
 };
 
 export async function transpile(path: string, source: string) {
@@ -73,9 +77,7 @@ export async function transpile(path: string, source: string) {
 
   return {
     code: transpiled?.code,
-    statementMaps: opts.statementMaps!,
-    fnMaps: opts.fnMaps!,
-    branchMaps: opts.branchMaps!
+    mapping: opts.mapping!
   };
 }
 
@@ -94,8 +96,7 @@ export function babelPlugin(
   // This is the builder for the call that will be injected before
   // each statement.
   const makeStatementCall = template.statement(`
-    _swic_s[%%fileIndex%%][%%statementIndex%%] =
-      (_swic_s[%%fileIndex%%][%%statementIndex%%] ?? 0) + 1;
+    _swic_s[%%fileIndex%%][%%statementIndex%%]++;
     `);
   return {
     visitor: {
@@ -103,18 +104,36 @@ export function babelPlugin(
         enter(path: any, state: any) {
           // Create "maps" (which are actually arrays) for each source file.
           const filePaths = [...mapPathToIndex.keys()];
-          opts.statementMaps = new Map(filePaths.map(filePath => [filePath, []]));
-          opts.fnMaps = new Map(filePaths.map(filePath => [filePath, []]));
-          opts.branchMaps = new Map(filePaths.map(filePath => [filePath, []]));
+          opts.mapping = new Map(filePaths.map(filePath => [filePath, {
+            statementMap: [],
+            fnMap: [],
+            branchMap: []
+          }]));
         },
 
         exit(path: any, state: any) {
+          // Create the preamble function to prepend to the script. The
+          // openDB() function is needed in both the service worker and
+          // the preamble, so it is converted to a string and inlined to
+          // avoid repeating the code in multiple places.
           const preambleString = preamble.toString()
             .replace('openDB()', `${openDB.toString()}()`);
-          const sources = JSON.stringify([...mapPathToIndex!.keys()]);
-          
+
+          // The argument to the preamble specifies the source files and
+          // the the data structures to hold the counts, which is derived
+          // from the structure of the coverage maps.
+          const shapes = [...mapPathToIndex.keys()].map(path => {
+            return [path, {
+              s: cvtCoverageMapToShape(opts.mapping!.get(path)!.statementMap),
+              f: cvtCoverageMapToShape(opts.mapping!.get(path)!.fnMap),
+              b: cvtCoverageMapToShape(opts.mapping!.get(path)!.branchMap)
+            }];
+          });
+          const shapesString = JSON.stringify(shapes);
+
           const makeProgramWrapper = template.statements(`
-            const { s: _swic_s, f: _swic_f, b: _swic_b } = (${preambleString})(${sources});
+            const { s: _swic_s, f: _swic_f, b: _swic_b } =
+              (${preambleString})(${shapesString});
             %%body%%
           `);
           path.node.body = makeProgramWrapper({
@@ -155,17 +174,17 @@ export function babelPlugin(
           const end = originalPositionFor(sourceMap, loc.end);
 
           fileIndex = mapPathToIndex!.get(start.source!)!;
-          statementIndex = opts.statementMaps!.get(start.source!)!.length;
-          opts.statementMaps!.get(start.source!)!.push({
+          statementIndex = opts.mapping!.get(start.source!)!.statementMap.length;
+          opts.mapping!.get(start.source!)!.statementMap.push({
             start: { line: start.line!, column: start.column! },
             end: { line: end.line!, column: end.column! }
           });
         } else {
           // No source map, so just use the location in the transpiled file.
           fileIndex = 0;
-          statementIndex = opts.statementMaps!.get(opts.path)!.length;
+          statementIndex = opts.mapping!.get(opts.path)!.statementMap.length;
 
-          opts.statementMaps!.get(opts.path)!.push({
+          opts.mapping!.get(opts.path)!.statementMap.push({
             start: { line: loc.start.line, column: loc.start.column },
             end: { line: loc.end.line, column: loc.end.column }
           });
@@ -180,4 +199,10 @@ export function babelPlugin(
       },
     }
   };
+}
+
+function cvtCoverageMapToShape(cm: any) {
+  return Array.isArray(cm[0]) ?
+    cm.map((child: any) => cvtCoverageMapToShape(child)) :
+    cm.length;
 }

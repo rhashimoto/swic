@@ -89,12 +89,14 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       const db = await dbPromise;
       const tx = db.transaction('maps', 'readwrite');
       const mapsStore = tx.objectStore('maps');
-      mapsStore.put({
-        path: requestUrl.pathname,
-        statementMaps: transpiled.statementMaps,
-        fnMaps: transpiled.fnMaps,
-        branchMaps: transpiled.branchMaps
-      });
+      for (const [path, mapping] of transpiled.mapping) {
+        mapsStore.put({
+          path,
+          statementMap: mapping.statementMap,
+          fnMap: mapping.fnMap,
+          branchMap: mapping.branchMap
+        });
+      }
       await new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve(undefined);
         tx.onerror = () => reject(tx.error);
