@@ -3,7 +3,7 @@ import * as MaybeBabel from "@babel/standalone";
 // import * as MaybeBabel from "@babel/standalone/babel.min.js";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 
-import { preamble } from "./injected.js";
+import { openDB, preamble } from "./injected.js";
 
 // esbuild isn't preserving setting `globalThis.Babel` as a side effect.
 // Strangely, importing the namespace works to get types in the IDE, but
@@ -109,9 +109,10 @@ export function babelPlugin(
         },
 
         exit(path: any, state: any) {
-          const sources = JSON.stringify([...mapPathToIndex!.keys()]);
           const preambleString = preamble.toString()
-            .replace('"createDB"', 'TODO')
+            .replace('openDB()', `${openDB.toString()}()`);
+          const sources = JSON.stringify([...mapPathToIndex!.keys()]);
+          
           const makeProgramWrapper = template.statements(`
             const { s: _swic_s, f: _swic_f, b: _swic_b } = (${preambleString})(${sources});
             %%body%%

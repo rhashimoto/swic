@@ -61,12 +61,14 @@ export function preamble(sources) {
       }
     }
 
-    // const dbPromise = openDB();
+    const dbPromise = openDB();
     globalThis.addEventListener('swic-save', event => {
       const customEvent = /** @type {CustomEvent} */(event);
 
-    //    customEvent.detail.response = dbPromise.then(db => {
-    //   });
+       customEvent.detail.response = dbPromise.then(db => {
+          const tx = db.transaction(['counts'], 'readwrite');
+          const countsStore = tx.objectStore('counts');
+      });
     });
   }
   return scriptState;
