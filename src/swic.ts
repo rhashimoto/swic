@@ -18,14 +18,14 @@ const config: { match: string[] } = Object.assign(
 
 const pathMatcher = buildPathMatcher(config.match);
 const dbPromise = openDB();
-
+const cachePromise = caches.open(CACHE_NAME);
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
 	event.waitUntil(Promise.all([
     self.skipWaiting(),
     (async () => {
       // Clear the cache.
-      const cache = await caches.open(CACHE_NAME);
+      const cache = await cachePromise;
       await cache.keys().then(keys => Promise.all(keys.map(key => cache.delete(key))));
 
       // Clear IndexedDB.
@@ -119,8 +119,17 @@ self.addEventListener("fetch", (event: FetchEvent) => {
         return response;
       }
 
-      // TODO: check cache for matching ETag
-
+      // If there is a cached response with the same ETag, return it
+      // without transpiling.
+      const cache = await cachePromise;
+      const fetchedETag = response.headers.get('etag');
+      if (fetchedETag) {
+        const cachedResponse = await cache.match(event.request);
+        if (cachedResponse && cachedResponse.headers.get('etag') === fetchedETag) {
+          return cachedResponse;
+        }
+      }
+      
       // Instrument this script.
       const responseBytes = await response.arrayBuffer();
       const responseText = new TextDecoder().decode(responseBytes);
@@ -149,18 +158,22 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       headers.delete('Content-Length');
       headers.delete('Content-Encoding');
       headers.delete('Content-Range');
-      headers.delete('ETag');
       headers.delete('Last-Modified');
       headers.delete('Digest');
       headers.delete('Content-Digest');
       headers.delete('Repr-Digest');
       headers.delete('Content-MD5');
 
-      return new Response(transpiled.code, {
+      const transpiledResponse = new Response(transpiled.code, {
         status: response.status,
         statusText: response.statusText,
         headers,
       });
+
+      // Add response to cache.
+      await cache.put(event.request, transpiledResponse.clone());
+
+      return transpiledResponse;
     } catch (error) {
       console.error(requestUrl.pathname, error);
       return new Response(null, {
