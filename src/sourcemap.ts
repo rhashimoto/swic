@@ -1,17 +1,15 @@
-//import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+import { EncodedSourceMap } from "@jridgewell/trace-mapping";
 
 export async function getSourceMap(
   url: string | URL,
-  source: string): Promise<any | undefined> {
+  source: string): Promise<EncodedSourceMap | undefined> {
   try {
     // Extract sourceMappingURL from source
     const match = source.match(/\/\/#\s*sourceMappingURL=(.+?)(?:\s|$)/);
     if (!match) {
       return undefined;
     }
-
     const sourceMappingURL = match[1].trim();
-    let mapContent: string;
 
     // Determine if it's a data URL or a file URL
     if (sourceMappingURL.startsWith("data:")) {
@@ -20,11 +18,15 @@ export async function getSourceMap(
       if (!dataMatch) {
         throw new Error(`Invalid data URL`);
       }
+
+      // Extact JSON.
+      let jsonString: string;
       if (sourceMappingURL.includes(";base64")) {
-        mapContent = atob(dataMatch[1]);
+        jsonString = atob(dataMatch[1]);
       } else {
-        mapContent = decodeURIComponent(dataMatch[1]);
+        jsonString = decodeURIComponent(dataMatch[1]);
       }
+      return JSON.parse(jsonString);
     } else {
       // Fetch from URL
       const mapUrl = new URL(sourceMappingURL, url);
@@ -32,9 +34,8 @@ export async function getSourceMap(
       if (!response.ok) {
         throw new Error(`Failed to fetch source map`);
       }
-      mapContent = await response.text();
+      return await response.json();
     }
-    return JSON.parse(mapContent);
   } catch (e) {
     console.warn(`Failed to load source map for ${url}:`, e);
     return undefined;

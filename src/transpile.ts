@@ -1,7 +1,7 @@
 // @ts-ignore
-import * as MaybeBabel from "@babel/standalone";
-// import * as MaybeBabel from "@babel/standalone/babel.min.js";
-import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+// import * as MaybeBabel from "@babel/standalone";
+import * as MaybeBabel from "@babel/standalone/babel.min.js";
+import { GeneratedMapping, TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 
 import { openDB, preamble } from "./injected.js";
 import { getSourceMap } from "./sourcemap.js";
@@ -18,14 +18,9 @@ const Babel = (MaybeBabel?.transform ?
   MaybeBabel :
   (globalThis as any).Babel) as typeof MaybeBabel;
 
-export interface FileLocation {
-  line: number;
-  column: number;
-};
-
 export interface FileRange {
-  start: FileLocation;
-  end: FileLocation;
+  start: GeneratedMapping; // { line: number, column: number }
+  end: GeneratedMapping;
 };
 
 export interface StatementEntry extends FileRange {};
@@ -55,23 +50,25 @@ export interface CustomPluginOptions {
   sourceMap?: TraceMap;
 
   // Output by the plugin.
-  mapping?: Map<string, CoverageMapping>;
+  mapping: Map<string, CoverageMapping>;
 };
 
 export async function transpile(url: URL, source: string) {
   const path = `.${url.pathname}`;
   const sourceMap = await getSourceMap(url, source);
 
-  // Patch source map sources.
+  // Patch source map source paths. The source map source paths are
+  // typically relative to the output file, so 
   if (sourceMap) {
-    sourceMap.sources = sourceMap.sources.map((source: string) => {
-      return `.${new URL(source!, url).pathname}`;
+    sourceMap.sources = sourceMap.sources.map((source) => {
+      return source ? `.${new URL(source, url).pathname}` : source;
     });
   }
 
   const opts: CustomPluginOptions = {
     path,
-    sourceMap: sourceMap && new TraceMap(sourceMap)
+    sourceMap: sourceMap && new TraceMap(sourceMap),
+    mapping: new Map() // placeholder, will be overwritten by the plugin
   };
 
   const transpiled = Babel.transform(source, {
@@ -89,7 +86,7 @@ export async function transpile(url: URL, source: string) {
 
   return {
     code: transpiled?.code,
-    mapping: opts.mapping!
+    mapping: opts.mapping
   };
 }
 
@@ -109,7 +106,7 @@ export function babelPlugin(
   // each statement.
   const makeStatementCall = template.statement(`
     _swic_s[%%fileIndex%%][%%statementIndex%%]++;
-    `);
+  `);
   return {
     visitor: {
       Program: {
@@ -136,9 +133,9 @@ export function babelPlugin(
           // from the structure of the coverage maps.
           const shapes = [...mapPathToIndex.keys()].map(path => {
             return [path, {
-              s: cvtCoverageMapToShape(opts.mapping!.get(path)!.statementMap),
-              f: cvtCoverageMapToShape(opts.mapping!.get(path)!.fnMap),
-              b: cvtCoverageMapToShape(opts.mapping!.get(path)!.branchMap)
+              s: cvtCoverageMapToShape(opts.mapping.get(path)!.statementMap),
+              f: cvtCoverageMapToShape(opts.mapping.get(path)!.fnMap),
+              b: cvtCoverageMapToShape(opts.mapping.get(path)!.branchMap)
             }];
           });
           const shapesString = JSON.stringify(shapes);
@@ -146,10 +143,10 @@ export function babelPlugin(
           const makeProgramWrapper = template.statements(`
             const { s: _swic_s, f: _swic_f, b: _swic_b } =
               (${preambleString})(${shapesString});
-            %%body%%
+            %%BODY%%
           `);
           path.node.body = makeProgramWrapper({
-            body: path.node.body
+            BODY: path.node.body
           });
         }
       },
@@ -185,18 +182,19 @@ export function babelPlugin(
           const start = originalPositionFor(sourceMap, loc.start);
           const end = originalPositionFor(sourceMap, loc.end);
 
+          const statementMap = opts.mapping.get(start.source!)!.statementMap;
           fileIndex = mapPathToIndex!.get(start.source!)!;
-          statementIndex = opts.mapping.get(start.source!)!.statementMap.length;
-          opts.mapping.get(start.source!)!.statementMap.push({
+          statementIndex = statementMap.length;
+          statementMap.push({
             start: { line: start.line!, column: start.column! },
             end: { line: end.line!, column: end.column! }
           });
         } else {
           // No source map, so just use the location in the transpiled file.
+          const statementMap = opts.mapping.get(opts.path)!.statementMap;
           fileIndex = 0;
-          statementIndex = opts.mapping.get(opts.path)!.statementMap.length;
-
-          opts.mapping.get(opts.path)!.statementMap.push({
+          statementIndex = statementMap.length;
+          statementMap.push({
             start: { line: loc.start.line, column: loc.start.column },
             end: { line: loc.end.line, column: loc.end.column }
           });
