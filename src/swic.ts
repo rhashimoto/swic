@@ -99,14 +99,14 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       if (fetchedETag) {
         const cachedResponse = await cache.match(event.request);
         if (cachedResponse && cachedResponse.headers.get('etag') === fetchedETag) {
-          return cachedResponse;
+          // return cachedResponse;
         }
       }
       
       // Instrument this script.
       const responseBytes = await response.arrayBuffer();
       const responseText = new TextDecoder().decode(responseBytes);
-      const transpiled = await transpile(`.${requestUrl.pathname}`, responseText);
+      const transpiled = await transpile(requestUrl, responseText);
 
       // Persist coverage maps to IndexedDB.
       const db = await dbPromise;

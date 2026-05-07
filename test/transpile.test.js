@@ -6,7 +6,7 @@ describe("transpile", () => {
       console.log('Hello, world!');
     `;
 
-    const transpiled = await transpile('/foo.js', source);
+    const transpiled = await transpile(new URL('file:///foo.js'), source);
     expect(transpiled).toBeDefined();
   });
 });

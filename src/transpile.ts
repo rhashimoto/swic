@@ -4,6 +4,7 @@ import * as MaybeBabel from "@babel/standalone";
 import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 
 import { openDB, preamble } from "./injected.js";
+import { getSourceMap } from "./sourcemap.js";
 
 // esbuild isn't preserving setting `globalThis.Babel` as a side effect.
 // Strangely, importing the namespace works to get types in the IDE, but
@@ -57,10 +58,20 @@ export interface CustomPluginOptions {
   mapping?: Map<string, CoverageMapping>;
 };
 
-export async function transpile(path: string, source: string) {
+export async function transpile(url: URL, source: string) {
+  const path = `.${url.pathname}`;
+  const sourceMap = await getSourceMap(url, source);
+
+  // Patch source map sources.
+  if (sourceMap) {
+    sourceMap.sources = sourceMap.sources.map((source: string) => {
+      return `.${new URL(source!, url).pathname}`;
+    });
+  }
+
   const opts: CustomPluginOptions = {
     path,
-    sourceMap: undefined // TODO
+    sourceMap: sourceMap && new TraceMap(sourceMap)
   };
 
   const transpiled = Babel.transform(source, {
@@ -69,7 +80,8 @@ export async function transpile(path: string, source: string) {
       allowAwaitOutsideFunction: true,
       sourceFilename: path, // used for AST node location
     },
-    inputSourceMap: undefined,
+    // @ts-ignore
+    inputSourceMap: sourceMap,
     sourceMaps: 'inline',
     filename: path, // used for state and error messages
     plugins: [[babelPlugin, opts]]
@@ -162,7 +174,7 @@ export function babelPlugin(
         if (path.getData('isVisited')) return;
         path.setData('isVisited', true);
 
-        const opts = state.opts as CustomPluginOptions;
+        const opts = state.opts as Required<CustomPluginOptions>;
         const sourceMap = opts.sourceMap;
 
         // Add a new entry to the appropriate statement map.
@@ -174,17 +186,17 @@ export function babelPlugin(
           const end = originalPositionFor(sourceMap, loc.end);
 
           fileIndex = mapPathToIndex!.get(start.source!)!;
-          statementIndex = opts.mapping!.get(start.source!)!.statementMap.length;
-          opts.mapping!.get(start.source!)!.statementMap.push({
+          statementIndex = opts.mapping.get(start.source!)!.statementMap.length;
+          opts.mapping.get(start.source!)!.statementMap.push({
             start: { line: start.line!, column: start.column! },
             end: { line: end.line!, column: end.column! }
           });
         } else {
           // No source map, so just use the location in the transpiled file.
           fileIndex = 0;
-          statementIndex = opts.mapping!.get(opts.path)!.statementMap.length;
+          statementIndex = opts.mapping.get(opts.path)!.statementMap.length;
 
-          opts.mapping!.get(opts.path)!.statementMap.push({
+          opts.mapping.get(opts.path)!.statementMap.push({
             start: { line: loc.start.line, column: loc.start.column },
             end: { line: loc.end.line, column: loc.end.column }
           });

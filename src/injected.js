@@ -2,8 +2,17 @@
 // instrumented code. Writing it as a real function allows using
 // IDE features and makes it easier to maintain.
 
-/** @typedef ContextState
- * @property {Map<string, { s: Array<number>, f: Array<number>, b: Array<Array<number>> }>} counters
+/**
+ * @typedef Counters
+ * @property {Array<number>} s
+ * @property {Array<number>} f
+ * @property {Array<Array<number>>} b
+ */
+
+/**
+ * @typedef ContextState
+ * @property {Map<string, any[]>} shapes
+ * @property {Map<string, Counters>} counters
  */
 
 /**
@@ -21,6 +30,7 @@ export function preamble(shapes) {
 
     // @ts-ignore
     globalThis.__swic__ = {
+      shapes: new Map(),
       counters: new Map()
     };
   }
@@ -43,15 +53,19 @@ export function preamble(shapes) {
   };
   shapes.forEach(([path, shape], i) => {
     // Configure counters in the global state for this source file.
-    const sourceCounters = {
-      s: cvtShapeToCoverageCounters(shape.s),
-      f: cvtShapeToCoverageCounters(shape.f),
-      b: cvtShapeToCoverageCounters(shape.b)
-    };
-    contextState.counters.set(path, sourceCounters);
+    if (!contextState.counters.has(path)) {
+      const sourceCounters = {
+        s: cvtShapeToCoverageCounters(shape.s),
+        f: cvtShapeToCoverageCounters(shape.f),
+        b: cvtShapeToCoverageCounters(shape.b)
+      };
+      contextState.counters.set(path, sourceCounters);
+      contextState.shapes.set(path, shape);
+    }
 
     // As an opimization, the transpiled code will increment the counters
     // by array index instead of a Map lookup.
+    const sourceCounters = /** @type {Counters} */(contextState.counters.get(path));
     scriptCounters.s.push(sourceCounters.s);
     scriptCounters.f.push(sourceCounters.f);
     scriptCounters.b.push(sourceCounters.b);
@@ -93,12 +107,13 @@ export function preamble(shapes) {
             if (request.result) {
               resolve(request.result);
             } else {
-              // No existing counts, so create a new entry with zeros.
+              // No existing counts, so initialize a set.
+              const shape = /** @type {any} */(contextState.shapes.get(path));
               resolve({
                 path,
-                s: cvtShapeToCoverageCounters(shapes[i][1].s),
-                f: cvtShapeToCoverageCounters(shapes[i][1].f),
-                b: cvtShapeToCoverageCounters(shapes[i][1].b)
+                s: cvtShapeToCoverageCounters(shape.s),
+                f: cvtShapeToCoverageCounters(shape.f),
+                b: cvtShapeToCoverageCounters(shape.b)
               });
             }
           };
