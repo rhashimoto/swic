@@ -2,6 +2,7 @@
 import { buildPathMatcher as buildPathMatcher } from "./path";
 import { transpile } from "./transpile";
 import { openDB } from "./injected";
+import { formatIstanbul } from "./format";
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -62,36 +63,8 @@ self.addEventListener("fetch", (event: FetchEvent) => {
   if (requestUrl.searchParams.has('swic-coverage')) {
     return event.respondWith((async () => {
       const db = await dbPromise;
-      const tx = db.transaction(['maps', 'counts'], 'readonly');
-      const [maps, counts]: any[] = await Promise.all([
-        new Promise((resolve, reject) => {
-          const request = tx.objectStore('maps').getAll();
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        }),
-        new Promise((resolve, reject) => {
-          const request = tx.objectStore('counts').getAll();
-          request.onsuccess = () => resolve(request.result);
-          request.onerror = () => reject(request.error);
-        })
-      ]);
-
-      const mapPathToMaps = new Map(maps.map((map: any) => [map.path, map]));
-      const entries = counts.map((count: any) => {
-        const map: any = mapPathToMaps.get(count.path);
-        const obj = {
-          path: count.path,
-          statementMap: cvtArrayToObject(map!.statementMap),
-          fnMap: cvtArrayToObject(map!.fnMap),
-          branchMap: cvtArrayToObject(map!.branchMap),
-          s: cvtArrayToObject(count.s),
-          f: cvtArrayToObject(count.f),
-          b: cvtArrayToObject(count.b)
-        };
-        return [count.path, obj];
-      });
-      const obj = Object.fromEntries(entries);
-      return new Response(JSON.stringify(obj), {
+      const report = await formatIstanbul(db);
+      return new Response(JSON.stringify(report), {
         status: 200,
         statusText: 'OK',
         headers: { 'Content-Type': 'application/json' }
@@ -183,7 +156,3 @@ self.addEventListener("fetch", (event: FetchEvent) => {
     }
   })());
 });
-
-function cvtArrayToObject<T>(a: Array<T>): { [key: number]: T } {
-  return Object.fromEntries(a.map((value, index) => [index + 1, value]));
-}
