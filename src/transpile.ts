@@ -3,7 +3,8 @@
 import * as MaybeBabel from "@babel/standalone/babel.min.js";
 import { GeneratedMapping, TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
 
-import { openDB, preamble } from "./injected.js";
+import { preamble } from "./injected.js";
+import { openIDB } from "./persistence.js";
 import { getSourceMap } from "./sourcemap.js";
 
 // esbuild isn't preserving setting `globalThis.Babel` as a side effect.
@@ -181,11 +182,11 @@ export function babelPlugin(
 
         exit(path: any, state: any) {
           // Create the preamble function to prepend to the script. The
-          // openDB() function is needed in both the service worker and
+          // openIDB() function is needed in both the service worker and
           // the preamble, so it is converted to a string and inlined to
           // avoid repeating the code in multiple places.
           const preambleString = preamble.toString()
-            .replace('openDB()', `${openDB.toString()}()`);
+            .replace('openIDB()', `${openIDB.toString()}()`);
 
           // The argument to the preamble specifies the source files and
           // the the data structures to hold the counts, which is derived

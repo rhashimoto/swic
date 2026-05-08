@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { buildPathMatcher as buildPathMatcher } from "./path";
 import { transpile } from "./transpile";
-import { openDB } from "./injected";
+import { openIDB, idbPromise } from "./persistence";
 import { formatIstanbul } from "./format";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -18,7 +18,7 @@ const config: { match: string[] } = Object.assign(
 );
 
 const pathMatcher = buildPathMatcher(config.match);
-const dbPromise = openDB();
+const dbPromise = openIDB();
 const cachePromise = caches.open(CACHE_NAME);
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
@@ -34,11 +34,7 @@ self.addEventListener("install", (event: ExtendableEvent) => {
       const tx = db.transaction(['maps', 'counts'], 'readwrite');
       tx.objectStore('maps').clear();
       tx.objectStore('counts').clear();
-      await new Promise<void>((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-        tx.commit();
-      });
+      await idbPromise(tx);
     })()
   ]));
 });
@@ -120,11 +116,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
           branchMap: mapping.branchMap
         });
       }
-      await new Promise((resolve, reject) => {
-        tx.oncomplete = () => resolve(undefined);
-        tx.onerror = () => reject(tx.error);
-        tx.commit();
-      });
+      await idbPromise(tx);
 
       // Remove headers that may be invalid after instrumentation.
       const headers = new Headers(response.headers);
