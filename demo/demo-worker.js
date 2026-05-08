@@ -1,7 +1,7 @@
 import { foo } from "./sample";
 console.log('Hello, world!');
 if (true) {
-    console.log('if branch');
+    console.log('if branch', (() => 42)());
 }
 else {
     console.log('else branch');

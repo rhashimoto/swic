@@ -107,6 +107,65 @@ export function babelPlugin(
   const makeStatementCall = template.statement(`
     _swic_s[%%fileIndex%%][%%statementIndex%%]++;
   `);
+
+  const makeFnCall = template.statement(`
+    _swic_f[%%fileIndex%%][%%fnIndex%%]++;
+  `);
+
+  const makeBranchCall = template.statement(`
+    _swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++;
+  `);
+
+  // There are many types of function nodes in the AST. They are all
+  // handled by this common helper.
+  function registerFunction(path: any) {
+    // Skip statements that are not in the original source.
+    const loc = path.node.loc;
+    if (!loc) return;
+
+    // Avoid instrumenting the same statement multiple times.
+    if (path.getData('isVisited')) return;
+    path.setData('isVisited', true);
+
+    let fileIndex: number;
+    let fnIndex: number;
+    const sourceMap = opts.sourceMap;
+    if (sourceMap) {
+      const start = originalPositionFor(sourceMap, loc.start);
+      const end = originalPositionFor(sourceMap, loc.end);
+
+      const fnMap = opts.mapping.get(start.source!)!.fnMap;
+      fileIndex = mapPathToIndex!.get(start.source!)!;
+      fnIndex = fnMap.length;
+      fnMap.push({
+        name: path.node.id ? path.node.id.name : `anonymous_${fnIndex}`,
+        line: start.line!,
+        loc: {
+          start: { line: start.line!, column: start.column! },
+          end: { line: end.line!, column: end.column! }
+        }
+      });
+    } else {
+      const fnMap = opts.mapping.get(opts.path)!.fnMap;
+      fileIndex = 0;
+      fnIndex = fnMap.length;
+      fnMap.push({
+        name: path.node.id ? path.node.id.name : `anonymous_${fnIndex}`,
+        line: loc.start.line,
+        loc: {
+          start: { line: loc.start.line, column: loc.start.column },
+          end: { line: loc.end.line, column: loc.end.column }
+        }
+      });
+    }
+
+    const callExpression = makeFnCall({
+      fileIndex: t.numericLiteral(fileIndex),
+      fnIndex: t.numericLiteral(fnIndex),
+    });
+    path.get('body').insertBefore(callExpression);
+  }
+
   return {
     visitor: {
       Program: {
@@ -207,6 +266,26 @@ export function babelPlugin(
         });
         path.insertBefore(callExpression);
       },
+
+      FunctionDeclaration(path: any, state: any) {
+        registerFunction(path);
+      },
+
+      FunctionExpression(path: any, state: any) {
+        registerFunction(path);
+      },
+
+      ObjectMethod(path: any, state: any) {
+        registerFunction(path);
+      },
+      
+      ClassMethod(path: any, state: any) {
+        registerFunction(path);
+      },
+
+      ArrowFunctionExpression(path: any, state: any) {
+        registerFunction(path);
+      }
     }
   };
 }
