@@ -15,6 +15,22 @@ export function openIDB() {
 }
 
 /**
+ * Gets all entries from the specified object stores in an IndexedDB database.
+ * @param {IDBDatabase} db 
+ * @param {string[]|DOMStringList} storeNames 
+ * @returns {Promise<{[storeName: string]: any[]}>}
+ */
+export async function getAllFromIDB(db, storeNames = db.objectStoreNames) {
+  const storeNameArray = Array.from(storeNames);
+  const tx = db.transaction(storeNameArray, 'readonly');
+  const objectEntries = await Promise.all(storeNameArray.map(storeName => {
+    const store = tx.objectStore(storeName);
+    return idbPromise(store.getAll()).then(results => [storeName, results]);
+  }));
+  return Object.fromEntries(objectEntries);
+}
+
+/**
  * Wraps an IndexedDB request or transaction in a Promise.
  * 
  * @param {IDBRequest|IDBOpenDBRequest|IDBTransaction} idbTarget

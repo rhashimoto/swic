@@ -28,22 +28,9 @@ interface IstanbulReport {
   [path: string]: IstanbulEntry;
 }
 
-export async function formatIstanbul(db: IDBDatabase): Promise<IstanbulReport> {
-  // Load all coverage maps and counts from IndexedDB.
-  const tx = db.transaction(['maps', 'counts'], 'readonly');
-  const [maps, counts]: [CoverageMaps[], CoverageCounts[]] = await Promise.all([
-    new Promise<CoverageMaps[]>((resolve, reject) => {
-      const request: IDBRequest<CoverageMaps[]> = tx.objectStore('maps').getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    }),
-    new Promise<CoverageCounts[]>((resolve, reject) => {
-      const request: IDBRequest<CoverageCounts[]> = tx.objectStore('counts').getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    })
-  ]);
-
+export async function formatIstanbul(
+  { maps, counts }: { maps: CoverageMaps[]; counts: CoverageCounts[] }
+): Promise<IstanbulReport> {
   // Convert to Istanbul format. This involves matching up the counts
   // with the corresponding maps, and converting arrays to objects with
   // integer keys (1-based).

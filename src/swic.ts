@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { buildPathMatcher as buildPathMatcher } from "./path";
 import { transpile } from "./transpile";
-import { openIDB, idbPromise } from "./persistence";
+import { openIDB, idbPromise, getAllFromIDB } from "./persistence";
 import { formatIstanbul } from "./format";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -58,8 +58,12 @@ self.addEventListener("fetch", (event: FetchEvent) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.searchParams.has('swic-coverage')) {
     return event.respondWith((async () => {
+      // Load coverage data from IndexedDB.
       const db = await dbPromise;
-      const report = await formatIstanbul(db);
+      const data = await getAllFromIDB(db);
+
+      // Return coverage report in Istanbul format.
+      const report = await formatIstanbul(data as any);
       return new Response(JSON.stringify(report), {
         status: 200,
         statusText: 'OK',
