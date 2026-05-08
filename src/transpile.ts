@@ -54,14 +54,14 @@ export interface CustomPluginOptions {
 };
 
 export async function transpile(url: URL, source: string) {
-  const path = `.${url.pathname}`;
+  const path = url.pathname;
   const sourceMap = await getSourceMap(url, source);
 
   // Patch source map source paths. The source map source paths are
-  // typically relative to the output file, so 
+  // typically relative to the output file, so add the base URL.
   if (sourceMap) {
     sourceMap.sources = sourceMap.sources.map((source) => {
-      return source ? `.${new URL(source, url).pathname}` : source;
+      return source ? new URL(source, url).pathname : source;
     });
   }
 

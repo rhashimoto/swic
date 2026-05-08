@@ -50,9 +50,13 @@ export async function formatIstanbul(db: IDBDatabase): Promise<IstanbulReport> {
   // https://github.com/gotwarlost/istanbul/blob/master/coverage.json.md
   const mapPathToMaps = new Map(maps.map((map) => [map.path, map]));
   const entries = counts.map((count) => {
+    // Paths are absolute from the web server origin, but nyc will run on
+    // the command line where the absolute root will be different. Convert
+    // to a relative path.
     const map = mapPathToMaps.get(count.path)!;
+    const relativePath = `.${count.path}`;
     const entry: IstanbulEntry = {
-      path: count.path,
+      path: relativePath,
       statementMap: cvtArrayToObject(map!.statementMap),
       fnMap: cvtArrayToObject(map!.fnMap),
       branchMap: cvtArrayToObject(map!.branchMap),
@@ -60,7 +64,7 @@ export async function formatIstanbul(db: IDBDatabase): Promise<IstanbulReport> {
       f: cvtArrayToObject(count.f),
       b: cvtArrayToObject(count.b)
     };
-    return [count.path, entry];
+    return [relativePath, entry];
   });
   return Object.fromEntries(entries);
 }
