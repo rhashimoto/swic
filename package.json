@@ -23,6 +23,7 @@
   "dependencies": {
     "@babel/standalone": "8.0.0-rc.4",
     "@jridgewell/trace-mapping": "^0.3.31",
+    "idb": "^8.0.3",
     "minimatch": "^10.2.5"
   }
 }

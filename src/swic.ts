@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { buildPathMatcher as buildPathMatcher } from "./path";
 import { transpile } from "./transpile";
-import { openIDB, idbPromise, getAllFromIDB } from "./persistence";
+import { openIDB, clearDB, loadDataFromDB, saveMapsToDB } from "./persistence";
 import { formatIstanbul } from "./format";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -18,8 +18,8 @@ const config: { match: string[] } = Object.assign(
 );
 
 const pathMatcher = buildPathMatcher(config.match);
-const dbPromise = openIDB();
 const cachePromise = caches.open(CACHE_NAME);
+
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
 	event.waitUntil(Promise.all([
@@ -30,11 +30,7 @@ self.addEventListener("install", (event: ExtendableEvent) => {
       await cache.keys().then(keys => Promise.all(keys.map(key => cache.delete(key))));
 
       // Clear IndexedDB.
-      const db = await dbPromise;
-      const tx = db.transaction(['maps', 'counts'], 'readwrite');
-      tx.objectStore('maps').clear();
-      tx.objectStore('counts').clear();
-      await idbPromise(tx);
+      await clearDB();
     })()
   ]));
 });
@@ -59,8 +55,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
   if (requestUrl.searchParams.has('swic-coverage')) {
     return event.respondWith((async () => {
       // Load coverage data from IndexedDB.
-      const db = await dbPromise;
-      const data = await getAllFromIDB(db);
+      const data = await loadDataFromDB();
 
       // Return coverage report in Istanbul format.
       const report = await formatIstanbul(data as any);
@@ -109,18 +104,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       const transpiled = await transpile(requestUrl, responseText);
 
       // Persist coverage maps to IndexedDB.
-      const db = await dbPromise;
-      const tx = db.transaction('maps', 'readwrite');
-      const mapsStore = tx.objectStore('maps');
-      for (const [path, mapping] of transpiled.mapping) {
-        mapsStore.put({
-          path,
-          statementMap: mapping.statementMap,
-          fnMap: mapping.fnMap,
-          branchMap: mapping.branchMap
-        });
-      }
-      await idbPromise(tx);
+      await saveMapsToDB(transpiled.mapping);
 
       // Remove headers that may be invalid after instrumentation.
       const headers = new Headers(response.headers);

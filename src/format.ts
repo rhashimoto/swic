@@ -1,18 +1,4 @@
-import { BranchEntry, FnEntry, StatementEntry } from "./transpile";
-
-interface CoverageMaps {
-  path: string;
-  statementMap: StatementEntry[];
-  fnMap: FnEntry[];
-  branchMap: BranchEntry[];
-}
-
-interface CoverageCounts {
-  path: string;
-  s: number[];
-  f: number[];
-  b: number[][];
-}
+import { CoverageMaps, CoverageCounts, StatementEntry, FnEntry, BranchEntry } from "./types/index";
 
 interface IstanbulEntry {
   path: string;
@@ -29,7 +15,7 @@ interface IstanbulReport {
 }
 
 export async function formatIstanbul(
-  { maps, counts }: { maps: CoverageMaps[]; counts: CoverageCounts[] }
+  { maps, counts }: { maps: CoverageMaps[], counts: CoverageCounts[] }
 ): Promise<IstanbulReport> {
   // Convert to Istanbul format. This involves matching up the counts
   // with the corresponding maps, and converting arrays to objects with

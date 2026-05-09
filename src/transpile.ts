@@ -1,7 +1,8 @@
 // @ts-ignore
 // import * as MaybeBabel from "@babel/standalone";
 import * as MaybeBabel from "@babel/standalone/babel.min.js";
-import { GeneratedMapping, TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+import { TraceMap, originalPositionFor } from "@jridgewell/trace-mapping";
+import { type CoverageMaps } from "./types/index.js";
 
 import { preamble } from "./injected.js";
 import { openIDB } from "./persistence.js";
@@ -19,39 +20,12 @@ const Babel = (MaybeBabel?.transform ?
   MaybeBabel :
   (globalThis as any).Babel) as typeof MaybeBabel;
 
-export interface FileRange {
-  start: GeneratedMapping; // { line: number, column: number }
-  end: GeneratedMapping;
-};
-
-export interface StatementEntry extends FileRange {};
-interface BranchRange extends FileRange { skip?: true }; // always true if present
-
-export interface FnEntry {
-  name: string;
-  line: number;
-  loc: FileRange;
-  skip?: true; // always true if present
-};
-
-export interface BranchEntry {
-  line: number;
-  type: string;
-  locations: BranchRange[];
-};
-
-interface CoverageMapping {
-  statementMap: StatementEntry[];
-  fnMap: FnEntry[];
-  branchMap: BranchEntry[];
-}
-
 export interface CustomPluginOptions {
   path: string;
   sourceMap?: TraceMap;
 
   // Output by the plugin.
-  mapping: Map<string, CoverageMapping>;
+  mapping: Map<string, CoverageMaps>;
 };
 
 export async function transpile(url: URL, source: string) {

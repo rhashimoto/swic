@@ -1,3 +1,9 @@
+import { wrap } from "idb";
+
+/** @import { CoverageMaps, CoverageCounts } from "./types/index" */
+
+const dbPromise = openIDB().then(db => wrap(db));
+
 /**
  * @returns {Promise<IDBDatabase>}
  */
@@ -14,63 +20,43 @@ export function openIDB() {
   });
 }
 
+export async function clearDB() {
+  const db = await dbPromise;
+  const tx = db.transaction(db.objectStoreNames, 'readwrite');
+  Array.from(db.objectStoreNames).forEach(storeName => {
+    tx.objectStore(storeName).clear();
+  });
+  await tx.done;
+}
+
 /**
- * Gets all entries from the specified object stores in an IndexedDB database.
- * @param {IDBDatabase} db 
- * @param {string[]|DOMStringList} storeNames 
- * @returns {Promise<{[storeName: string]: any[]}>}
+ * @returns {Promise<{ maps: CoverageMaps[], counts: CoverageCounts[] }>}
  */
-export async function getAllFromIDB(db, storeNames = db.objectStoreNames) {
-  const storeNameArray = Array.from(storeNames);
+export async function loadDataFromDB() {
+  const db = await dbPromise;
+  const storeNameArray = Array.from(db.objectStoreNames);
   const tx = db.transaction(storeNameArray, 'readonly');
   const objectEntries = await Promise.all(storeNameArray.map(storeName => {
     const store = tx.objectStore(storeName);
-    return idbPromise(store.getAll()).then(results => [storeName, results]);
+    return store.getAll().then(results => [storeName, results]);
   }));
   return Object.fromEntries(objectEntries);
 }
 
 /**
- * Wraps an IndexedDB request or transaction in a Promise.
- * 
- * @param {IDBRequest|IDBOpenDBRequest|IDBTransaction} idbTarget
- * @param {{[key: string]: Function}} [handlers={}]
- * @returns {Promise<any>}
- * @throws {Error}
+ * @param {Iterable<[string, CoverageMaps]>} maps
  */
-export function idbPromise(idbTarget, handlers = {}) {
-  return new Promise((resolve, reject) => {
-    Object.keys(handlers).forEach(handlerName => {
-      if (!(handlerName in idbTarget)) {
-        throw new Error(`${handlerName} not supported on ${idbTarget.constructor.name}`);
-      }
+export async function saveMapsToDB(maps) {
+  const db = await dbPromise;
+  const tx = db.transaction(['maps'], 'readwrite');
+  const store = tx.objectStore('maps');
+  for (const [path, mapping] of maps) {
+    store.put({
+      path,
+      statementMap: mapping.statementMap,
+      fnMap: mapping.fnMap,
+      branchMap: mapping.branchMap
     });
-
-    // Start with any provided handlers.
-    Object.assign(idbTarget, handlers);
-
-    // Overwrite handlers for Promise resolve/reject.
-    if (idbTarget instanceof IDBTransaction) {
-      idbTarget.oncomplete = (event) => {
-        handlers.oncomplete?.(event);
-        resolve(event); 
-      };
-      idbTarget.onabort = (event) => {
-        handlers.onabort?.(event);
-        reject(idbTarget.error || new Error("Transaction aborted"));
-      };
-      idbTarget.commit();
-    } else {
-      // IDBRequest or IDBOpenDBRequest
-      idbTarget.onsuccess = (event) => {
-        handlers.onsuccess?.(event);
-        resolve(idbTarget.result);
-      };
-    }
-
-    idbTarget.onerror = (event) => {
-      handlers.onerror?.(event);
-      reject(idbTarget.error);
-    };
-  });
+  }
+  await tx.done;
 }
