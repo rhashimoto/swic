@@ -90,7 +90,6 @@ export async function saveMapsToDB(maps) {
 
     if (contentChanged.has(path)) {
       // Reset counts for modified file.
-      console.debug(`Reset counts for ${path}`);
       countsStore.delete(path);
     }
   }

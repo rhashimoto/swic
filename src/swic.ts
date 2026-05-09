@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 import { buildPathMatcher as buildPathMatcher } from "./path";
 import { transpile } from "./transpile";
-import { openIDB, clearDB, loadDataFromDB, saveMapsToDB } from "./persistence";
+import { clearDB, loadDataFromDB, saveMapsToDB } from "./persistence";
 import { formatIstanbul } from "./format";
 
 declare const self: ServiceWorkerGlobalScope;
