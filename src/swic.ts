@@ -22,8 +22,8 @@ const cachePromise = caches.open(CACHE_NAME);
 
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
-	event.waitUntil(Promise.all([
-    self.skipWaiting(),
+  self.skipWaiting();
+	event.waitUntil(
     (async () => {
       // Clear the cache.
       const cache = await cachePromise;
@@ -32,7 +32,7 @@ self.addEventListener("install", (event: ExtendableEvent) => {
       // Clear IndexedDB.
       await clearDB();
     })()
-  ]));
+  );
 });
 
 // Take control of existing pages as soon as this worker activates.
