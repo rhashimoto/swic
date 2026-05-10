@@ -18,11 +18,13 @@ while (true) {
   await new Promise(resolve => setTimeout(resolve, 1000));
 }
 
-// Configure isEnabled UI.
+// Configure isEnabled UI. The event handler is attached to the container
+// element, so it will get the event from either radio button.
 document.querySelector(`input[name="isEnabled"][value="${swConfig.isEnabled}"]`)
   ?.setAttribute('checked', '');
 document.getElementById('isEnabled')?.addEventListener('change', event => {
   if (event.target instanceof HTMLInputElement) {
+    // Update local config and send to the service worker.
     swConfig.isEnabled = event.target.value === 'true';
     fetch('https://swic.test/config', {
       method: 'POST',
@@ -35,6 +37,7 @@ document.getElementById('isEnabled')?.addEventListener('change', event => {
   }
 });
 
+// Create a helper function to build the UI for a match pattern entry.
 const matchContainer = document.getElementById('match-container');
 const matchButton = /** @type {HTMLButtonElement} */ (document.getElementById('match-button'));
 const buildMatchUI = (function() {
@@ -42,14 +45,19 @@ const buildMatchUI = (function() {
     (document.getElementById('pattern-template'));
 
   return function(/** @type {string} */ pattern) {
+    // Instantiate the HTML from a template element.
     const container = /** @type {HTMLElement} */
       (/** @type {HTMLElement} */ (template.content.cloneNode(true)).firstElementChild);
+
+    // Initialize the input pattern string. Any edit will enable the update
+    // button.
     const input = /** @type {HTMLInputElement} */ (container.querySelector('input'));
     input.value = pattern;
     input.addEventListener('input', () => {
       matchButton.disabled = false;
     });
 
+    // Add handlers for the add and remove row buttons.
     container.querySelector('button[name="add"]')?.addEventListener('click', () => {
       const newRow = buildMatchUI('');
       container.insertAdjacentElement('afterend', newRow);
@@ -58,6 +66,7 @@ const buildMatchUI = (function() {
       container.remove();
       matchButton.disabled = false;
       if (matchContainer?.childElementCount === 0) {
+        // Ensure at least one row is present for the user to interact with.
         const newRow = buildMatchUI('');
         matchContainer.appendChild(newRow);
       }
@@ -76,6 +85,7 @@ if (swConfig.match.length === 0) {
   matchContainer?.appendChild(row);
 }
 
+// Handler to upload patterns to the service worker.
 matchButton.disabled = true;
 matchButton.addEventListener('click', event => {
   const newMatch = Array.from(matchContainer?.querySelectorAll('input') ?? [])
@@ -93,7 +103,21 @@ matchButton.addEventListener('click', event => {
   matchButton.disabled = true;
 });
 
-const exportButton = /** @type {HTMLButtonElement} */ (document.getElementById('export-button'));
+// Instrumented scripts increment coverage counts in memory. Eventually
+// those counts need to be merged to persistent storage, i.e. IndexedDB.
+// This is triggered by a "swic-save" event on the context or a message
+// on a "swic-save" BroadcastChannel. Clicking this button ensures that
+// counts on any active page contexts will be included in a subsequent
+// export.
+const collectButton = /** @type {HTMLButtonElement} */
+  (document.getElementById('collect-button'));
+collectButton.addEventListener('click', async () => {
+  new BroadcastChannel('swic-save').postMessage(null);
+});
+
+// Export coverage data as a JSON file.
+const exportButton = /** @type {HTMLButtonElement} */
+  (document.getElementById('export-button'));
 exportButton.addEventListener('click', async () => {
   const response = await fetch('https://swic.test/coverage');
   if (response.ok) {
@@ -127,6 +151,7 @@ exportButton.addEventListener('click', async () => {
   }
 });
 
+// Clear all coverage data from IndexedDB and Cache Storage.
 const clearButton = /** @type {HTMLButtonElement} */ (document.getElementById('clear-button'));
 clearButton.addEventListener('click', async () => {
   if (confirm('Are you sure you want to clear all coverage data? This action cannot be undone.')) {
