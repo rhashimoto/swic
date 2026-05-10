@@ -98,12 +98,30 @@ exportButton.addEventListener('click', async () => {
   const response = await fetch('https://swic.test/coverage');
   if (response.ok) {
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'coverage.json';
-    a.click();
-    URL.revokeObjectURL(url);
+    // @ts-ignore
+    if (typeof window.showSaveFilePicker === 'function') {
+      try {
+        // @ts-ignore
+        const fileHandle = await window.showSaveFilePicker({
+          suggestedName: 'coverage.json',
+          types: [{ description: 'JSON Files', accept: { 'application/json': ['.json'] } }],
+        });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } catch (/** @type {any} */ e) {
+        if (e.name !== 'AbortError') {
+          swStatus.textContent = `error: ${e.message}`;
+        }
+      }
+    } else {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'coverage.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   } else {
     swStatus.textContent = `error: ${response.statusText}`;
   }
