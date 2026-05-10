@@ -16,6 +16,7 @@ node_modules
 #!.yarn/cache
 .pnp.*
 
+.parcel-cache/
 dist/
 .nyc_output/
 coverage/

@@ -1,6 +1,6 @@
 import { wrap } from "idb";
 
-/** @import { CoverageMaps, CoverageCounts } from "./types/index" */
+/** @import { Config, CoverageMaps, CoverageCounts } from "./types/index" */
 
 const dbPromise = openIDB().then(db => wrap(db));
 
@@ -15,12 +15,33 @@ export function openIDB() {
     const request = indexedDB.open('swic', 1);
     request.onupgradeneeded = () => {
       const db = request.result;
+      db.createObjectStore('kv');
       db.createObjectStore('maps', { keyPath: 'path' });
       db.createObjectStore('counts', { keyPath: 'path' });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
+}
+
+/**
+ * @param {Config} config
+ */
+export async function putConfig(config) {
+  const db = await dbPromise;
+  const tx = db.transaction('kv', 'readwrite');
+  tx.objectStore('kv').put(config, 'config');
+  tx.commit();
+}
+
+/**
+ * @returns {Promise<Config>}
+ */
+export async function getConfig() {
+  const db = await dbPromise;
+  const tx = db.transaction('kv', 'readonly');
+  const config = await tx.objectStore('kv').get('config');
+  return config || { isEnabled: false, match: [] };
 }
 
 export async function clearDB() {

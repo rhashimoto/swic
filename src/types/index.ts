@@ -1,3 +1,8 @@
+export interface Config {
+  isEnabled: boolean;
+  match: string[];
+}
+
 export interface FileLocation {
   line: number;
   column: number;

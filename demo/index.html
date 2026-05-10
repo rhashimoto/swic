@@ -8,32 +8,6 @@
   <h1>swic demo/debug</h1>
   <div><a href="?swic-coverage" target="_blank">View Coverage</a></div>
   <script type="module">
-    const url = new URL('/swic.js', location.origin);
-    url.searchParams.set('config', JSON.stringify({
-      match: [
-        '/demo/**/*.js',
-        '/src/**/*.jsmxs',
-        '!node_modules/**',
-      ]
-    }));
-
-    await navigator.serviceWorker.register(url, { type: 'module' }).then(() => {
-      return navigator.serviceWorker.ready;
-    });
-
-    while (true) {
-      const response = await fetch(location.href, {
-        method: 'HEAD',
-        headers: { 'x-swic': 'ping' }
-      });
-      if (response.headers.get('x-swic') === 'pong') {
-        break;
-      }
-
-      console.log('Waiting for service worker...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-
     const worker = new Worker('./demo-worker.js', { type: 'module' });
   </script>
 </body>

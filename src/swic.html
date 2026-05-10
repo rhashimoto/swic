@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SWIC coverage tool</title>
+  <script type="module">
+    import "./swic-admin.js";
+  </script>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 2rem auto; padding: 0 1rem; }
+    section { margin-bottom: 2rem; }
+    #coverage-controls label { margin-right: 1.5rem; cursor: pointer; }
+    #sw-status-container { margin-top: 0.75rem; }
+    #sw-status { font-weight: bold; }
+    #data-controls { display: flex; justify-content: space-evenly; }
+    .pattern-row { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+    .pattern-input { flex: 1; padding: 0.25rem 0.4rem; font-size: 0.95rem; }
+    .pattern-btn { width: 1.6rem; height: 1.6rem; font-size: 1rem; line-height: 1; cursor: pointer; padding: 0; }
+  </style>
+</head>
+<body>
+  <h1>SWIC coverage tool</h1>
+
+  <section>
+    <h2>Coverage Instrumentation</h2>
+    <div id="isEnabled">
+      <label><input type="radio" name="isEnabled" value="true"> On</label>
+      <label><input type="radio" name="isEnabled" value="false"> Off</label>
+    </div>
+    <div id="sw-status-container">
+      <span>Service worker: </span><span id="sw-status">…</span>
+    </div>
+  </section>
+
+  <template id="pattern-template">
+    <div class="pattern-row">
+      <input type="text" class="pattern-input">
+      <button class="pattern-btn" name="add">+</button>
+      <button class="pattern-btn" name="remove">-</button>
+    </div>
+  </template>
+
+  <section>
+    <h2>Source File Patterns</h2>
+    <div class="pattern-row">
+    Use glob patterns, e.g. <code>/src/**/*.js</code> or <code>!/node_modules/**</code>.
+    </div>
+    <div id="match-container"></div>
+    <button id="match-button">Update patterns</button>
+  </section>
+
+  <section>
+    <h2>Coverage Data</h2>
+    <div id="data-controls">
+      <button id="export-button">Export</button>
+      <button id="clear-button">Clear</button>
+    </div>
+  </section>
+</body>
+</html>

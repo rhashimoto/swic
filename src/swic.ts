@@ -1,38 +1,29 @@
 /// <reference lib="webworker" />
+import { type Config } from "./types";
 import { buildPathMatcher as buildPathMatcher } from "./path";
 import { transpile } from "./transpile";
-import { clearDB, loadDataFromDB, saveMapsToDB } from "./persistence";
+import { clearDB, getConfig, loadDataFromDB, putConfig, saveMapsToDB } from "./persistence";
 import { formatIstanbul } from "./format";
 
 declare const self: ServiceWorkerGlobalScope;
 
-const DEFAULT_CONFIG = {
-  match: ['*.js', '!/**/node_modules/**']
-};
+const VIRTUAL_ORIGIN = 'https://swic.test';
 const CACHE_NAME = 'swic-cache-v1';
 
-// Load configuration from query parameter "config" as JSON.
-const config: { match: string[] } = Object.assign(
-  DEFAULT_CONFIG,
-  JSON.parse(new URLSearchParams(location.search).get("config") || "{}")
-);
+let config: Config|undefined;
+let pathMatcher: ((path: string) => boolean)|undefined;
+(async function() {
+  config = await getConfig();
+  if (config) {
+    pathMatcher = buildPathMatcher(config.match);
+  }
+})();
 
-const pathMatcher = buildPathMatcher(config.match);
 const cachePromise = caches.open(CACHE_NAME);
 
 // Activate the newly installed worker immediately.
 self.addEventListener("install", (event: ExtendableEvent) => {
   self.skipWaiting();
-	event.waitUntil(
-    (async () => {
-      // Clear the cache.
-      const cache = await cachePromise;
-      await cache.keys().then(keys => Promise.all(keys.map(key => cache.delete(key))));
-
-      // Clear IndexedDB.
-      await clearDB();
-    })()
-  );
 });
 
 // Take control of existing pages as soon as this worker activates.
@@ -41,38 +32,25 @@ self.addEventListener("activate", (event: ExtendableEvent) => {
 });
 
 self.addEventListener("fetch", (event: FetchEvent) => {
-  // Answer ping requests.
-  if (event.request.headers.get('x-swic') === 'ping') {
-    return event.respondWith(new Response(null, {
-      status: 200,
-      statusText: 'OK',
-      headers: { 'x-swic': 'pong' }
-    }));
-  }
-
-  // Handle coverage report requests.
-  const requestUrl = new URL(event.request.url);
-  if (requestUrl.searchParams.has('swic-coverage')) {
+  const url = new URL(event.request.url);
+  if (url.origin === VIRTUAL_ORIGIN) {
     return event.respondWith((async () => {
-      // Load coverage data from IndexedDB.
-      const data = await loadDataFromDB();
-
-      // Return coverage report in Istanbul format.
-      const report = await formatIstanbul(data as any);
-      return new Response(JSON.stringify(report), {
-        status: 200,
-        statusText: 'OK',
-        headers: { 'Content-Type': 'application/json' }
-      });
+      try {
+        return handleVirtualRequest(event, url);
+      } catch (e: any) {
+        return new Response(e?.stack, {
+          status: 500,
+          statusText: 'Internal Server Error'
+        });
+      }
     })());
   }
 
-  // Ignore other requests that don't match the configured patterns.
-  if (!pathMatcher(requestUrl.pathname)) {
+  // Check for fast exit if there is a valid configuration.
+  if (config?.isEnabled === false || pathMatcher?.(url.pathname) === false) {
     return;
   }
-  
-  // Transpile matching requests.
+
   event.respondWith((async () => {
     try {
       const response = await fetch(event.request);
@@ -80,10 +58,16 @@ self.addEventListener("fetch", (event: FetchEvent) => {
         return response;
       }
 
-      // Ensure the response is JavaScript before trying to transpile it.
+      // Ensure the response is JavaScript.
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('javascript')) {
-        console.warn(`Skipping ${requestUrl.pathname}: content-type is ${contentType}`);
+        console.warn(`Skipping ${url.pathname}: content-type is ${contentType}`);
+        return response;
+      }
+
+      // Check the file path against the configued patterns.
+      config = config || await getConfig();
+      if (!config || !pathMatcher?.(url.pathname)) {
         return response;
       }
 
@@ -101,7 +85,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       // Instrument this script.
       const responseBytes = await response.arrayBuffer();
       const responseText = new TextDecoder().decode(responseBytes);
-      const transpiled = await transpile(requestUrl, responseText);
+      const transpiled = await transpile(url, responseText);
 
       // Persist coverage maps to IndexedDB.
       await saveMapsToDB(transpiled.mapping);
@@ -128,7 +112,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
 
       return transpiledResponse;
     } catch (error) {
-      console.error(requestUrl.pathname, error);
+      console.error(url.pathname, error);
       return new Response(null, {
         status: 500,
         statusText: 'Internal Server Error'
@@ -136,3 +120,63 @@ self.addEventListener("fetch", (event: FetchEvent) => {
     }
   })());
 });
+
+async function handleVirtualRequest(event: FetchEvent, url: URL): Promise<Response> {
+  switch (url.pathname) {
+    case '/ping':
+      return new Response(null, {
+        status: 200,
+        statusText: 'OK',
+        headers: { 'x-swic': 'pong' }
+      });
+
+    case '/config':
+      if (event.request.method === 'POST') {
+        config = await event.request.json();
+        if (config) {
+          await putConfig(config);
+          pathMatcher = buildPathMatcher(config.match);
+        }
+        return new Response(null, {
+          status: 200,
+          statusText: 'OK'
+        });
+      } else {
+        return new Response(JSON.stringify(config), {
+          status: 200,
+          statusText: 'OK',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+    case '/coverage':
+      if (event.request.method === 'GET') {
+        const data = await loadDataFromDB();
+        const report = await formatIstanbul(data as any);
+        return new Response(JSON.stringify(report), {
+          status: 200,
+          statusText: 'OK',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } else if (event.request.method === 'DELETE') {
+        const cache = await cachePromise;
+        await cache.keys().then(keys => Promise.all(keys.map(key => cache.delete(key))));
+        await clearDB();
+        return new Response(null, {
+          status: 200,
+          statusText: 'OK'
+        });
+      } else {
+        return new Response(null, {
+          status: 405,
+          statusText: 'Method Not Allowed'
+        });
+      }
+
+    default:
+      return new Response(null, {
+        status: 404,
+        statusText: 'Not Found'
+      });
+  }
+}
