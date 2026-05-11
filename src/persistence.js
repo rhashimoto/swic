@@ -46,8 +46,8 @@ export async function getConfig() {
 
 export async function clearDB() {
   const db = await dbPromise;
-  const tx = db.transaction(db.objectStoreNames, 'readwrite');
-  Array.from(db.objectStoreNames).forEach(storeName => {
+  const tx = db.transaction(['maps', 'counts'], 'readwrite');
+  Array.from(tx.objectStoreNames).forEach(storeName => {
     tx.objectStore(storeName).clear();
   });
 
@@ -60,9 +60,9 @@ export async function clearDB() {
  */
 export async function loadDataFromDB() {
   const db = await dbPromise;
-  const storeNameArray = Array.from(db.objectStoreNames);
-  const tx = db.transaction(storeNameArray, 'readonly');
-  const objectEntries = await Promise.all(storeNameArray.map(storeName => {
+  const storeNames = ['maps', 'counts'];
+  const tx = db.transaction(storeNames, 'readonly');
+  const objectEntries = await Promise.all(storeNames.map(storeName => {
     const store = tx.objectStore(storeName);
     return store.getAll().then(results => [storeName, results]);
   }));
@@ -115,5 +115,4 @@ export async function saveMapsToDB(maps) {
     }
   }
   await tx.done;
-
 }
