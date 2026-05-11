@@ -108,16 +108,22 @@ export function babelPlugin(
     if (sourceMap) {
       const start = originalPositionFor(sourceMap, loc.start);
       const end = originalPositionFor(sourceMap, loc.end);
+      if (!start.source || !end.source) {
+        // This can happen if the function is not in the original source,
+        // such as an injected function from a plugin. In that case, skip
+        // instrumentation.
+        return;
+      }
 
-      const fnMap = opts.mapping.get(start.source!)!.fnMap;
-      fileIndex = mapPathToIndex!.get(start.source!)!;
+      const fnMap = opts.mapping.get(start.source)!.fnMap;
+      fileIndex = mapPathToIndex!.get(start.source)!;
       fnIndex = fnMap.length;
       fnMap.push({
         name: path.node.id ? path.node.id.name : `anonymous_${fnIndex}`,
         line: start.line!,
         loc: {
-          start: { line: start.line!, column: start.column! },
-          end: { line: end.line!, column: end.column! }
+          start: { line: start.line, column: start.column },
+          end: { line: end.line, column: end.column }
         }
       });
     } else {
@@ -215,13 +221,19 @@ export function babelPlugin(
           // Use the source map to find the original location of the statement.
           const start = originalPositionFor(sourceMap, loc.start);
           const end = originalPositionFor(sourceMap, loc.end);
+          if (!start.source || !end.source) {
+            // This can happen if the statement is not in the original source,
+            // such as an injected statement from a plugin. In that case, skip
+            // instrumentation.
+            return;
+          }
 
-          const statementMap = opts.mapping.get(start.source!)!.statementMap;
-          fileIndex = mapPathToIndex!.get(start.source!)!;
+          const statementMap = opts.mapping.get(start.source)!.statementMap;
+          fileIndex = mapPathToIndex!.get(start.source)!;
           statementIndex = statementMap.length;
           statementMap.push({
-            start: { line: start.line!, column: start.column! },
-            end: { line: end.line!, column: end.column! }
+            start: { line: start.line, column: start.column },
+            end: { line: end.line, column: end.column }
           });
         } else {
           // No source map, so just use the location in the transpiled file.
