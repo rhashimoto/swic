@@ -1,0 +1,45 @@
+<!DOCTYPE html><html lang=en><meta charset=utf-8><title>SWIC coverage tool</title><script type=module>let e,t;let n=document.getElementById("sw-status");for(await navigator.serviceWorker.register(new URL("/swic.js",import.meta.url),{type:"module"});;){n.textContent="not ready";let t=await fetch("https://swic.test/config");if(t.ok){e=await t.json(),n.textContent="ready";break}await new Promise(e=>setTimeout(e,1e3))}document.querySelector(`input[name="isEnabled"][value="${e.isEnabled}"]`)?.setAttribute("checked",""),document.getElementById("isEnabled")?.addEventListener("change",t=>{t.target instanceof HTMLInputElement&&(e.isEnabled="true"===t.target.value,fetch("https://swic.test/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)}).catch(e=>{n.textContent=`error: ${e.message}`,console.error(e)}))});let a=document.getElementById("match-container"),o=document.getElementById("match-button"),r=(t=document.getElementById("pattern-template"),function(e){let n=t.content.cloneNode(!0).firstElementChild,c=n.querySelector("input");return c.value=e,c.addEventListener("input",()=>{o.disabled=!1}),n.querySelector('button[name="add"]')?.addEventListener("click",()=>{let e=r("");n.insertAdjacentElement("afterend",e)}),n.querySelector('button[name="remove"]')?.addEventListener("click",()=>{if(n.remove(),o.disabled=!1,a?.childElementCount===0){let e=r("");a.appendChild(e)}}),n});if(e.match.forEach(e=>{let t=r(e);a?.appendChild(t)}),0===e.match.length){let e=r("");a?.appendChild(e)}o.disabled=!0,o.addEventListener("click",t=>{let r=Array.from(a?.querySelectorAll("input")??[]).map(e=>e.value).filter(e=>""!==e.trim());e.match=r,fetch("https://swic.test/config",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(e)}).catch(e=>{n.textContent=`error: ${e.message}`,console.error(e)}),o.disabled=!0}),document.getElementById("collect-button").addEventListener("click",async()=>{new BroadcastChannel("swic-save").postMessage(null)}),document.getElementById("export-button").addEventListener("click",async()=>{let e=await fetch("https://swic.test/coverage");if(e.ok){let t=await e.blob();if("function"==typeof window.showSaveFilePicker)try{let e=await window.showSaveFilePicker({suggestedName:"coverage.json",types:[{description:"JSON Files",accept:{"application/json":[".json"]}}]}),n=await e.createWritable();await n.write(t),await n.close()}catch(e){"AbortError"!==e.name&&(n.textContent=`error: ${e.message}`)}else{let e=URL.createObjectURL(t),n=document.createElement("a");n.href=e,n.download="coverage.json",n.click(),URL.revokeObjectURL(e)}}else n.textContent=`error: ${e.statusText}`}),document.getElementById("clear-button").addEventListener("click",async()=>{if(confirm("Are you sure you want to clear all coverage data? This action cannot be undone.")){let e=await fetch("https://swic.test/coverage",{method:"DELETE"});e.ok||(n.textContent=`error: ${e.statusText}`)}});</script><style>body{max-width:600px;margin:2rem auto;padding:0 1rem;font-family:sans-serif}section{margin-bottom:2rem}#sw-status-container{margin-top:.75rem}#sw-status{font-weight:700}#data-controls{justify-content:space-evenly;display:flex}.pattern-row{align-items:center;gap:.4rem;margin-bottom:.4rem;display:flex}.pattern-input{flex:1;padding:.25rem .4rem;font-size:.95rem}.pattern-btn{cursor:pointer;width:1.6rem;height:1.6rem;padding:0;font-size:1rem;line-height:1}</style><body>
+  <h1>SWIC coverage tool</h1>
+
+  <section>
+    <h2>Coverage Instrumentation</h2>
+    <div id=isEnabled>
+      <label><input type=radio name=isEnabled value=true> On</label>
+      <label><input type=radio name=isEnabled value=false> Off</label>
+    </div>
+    <div id=sw-status-container>
+      <span>Service worker: </span><span id=sw-status>…</span>
+    </div>
+  </section>
+
+  <template id=pattern-template>
+    <div class=pattern-row>
+      <input class=pattern-input>
+      <button class=pattern-btn name=add>+</button>
+      <button class=pattern-btn name=remove>-</button>
+    </div>
+  </template>
+
+  <section>
+    <h2>Source File Patterns</h2>
+    <div class=pattern-row>
+    Use glob patterns, e.g. <code>/src/**/*.js</code> or <code>!/node_modules/**</code>.
+    </div>
+    <div id=match-container></div>
+    <button id=match-button>Update patterns</button>
+  </section>
+
+  <section>
+    <h2>Coverage Data</h2>
+    <div id=data-controls>
+      <button id=collect-button>Collect</button>
+      <button id=export-button>Export</button>
+      <button id=clear-button>Clear</button>
+    </div>
+  </section>
+
+  
+  <a href=https://github.com/rhashimoto/swic class=github-corner aria-label="View source on GitHub">
+    <svg width=60 height=60 aria-hidden=true style=z-index:999;fill:#151513;color:#fff;border:0;position:absolute;top:0;right:0 viewBox="0 0 250 250"><path d="m0 0 115 115h15l12 27 108 108V0Z"/><path fill=currentColor d="M128.3 109c-14.5-9.3-9.3-19.4-9.3-19.4 3-6.9 1.5-11 1.5-11-1.3-6.6 2.9-2.3 2.9-2.3 3.9 4.6 2.1 11 2.1 11-2.6 10.3 5.1 14.6 8.9 15.9" class=octo-arm style="transform-origin:130px 106px"/><path fill=currentColor d="M115 115c-.1.1 3.7 1.5 4.8.4l13.9-13.8c3.2-2.4 6.2-3.2 8.5-3-8.4-10.6-14.7-24.2 1.6-40.6 4.7-4.6 10.2-6.8 15.9-7 .6-1.6 3.5-7.4 11.7-10.9 0 0 4.7 2.4 7.4 16.1 4.3 2.4 8.4 5.6 12.1 9.2 3.6 3.6 6.8 7.8 9.2 12.2 13.7 2.6 16.2 7.3 16.2 7.3-3.6 8.2-9.4 11.1-10.9 11.7-.3 5.8-2.4 11.2-7.1 15.9-16.4 16.4-30 10-40.6 1.6.2 2.8-1 6.8-5 10.8L141 136.5c-1.2 1.2.6 5.4.8 5.3Z" class=octo-body /></svg>
+  </a>
+

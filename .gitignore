@@ -17,6 +17,5 @@ node_modules
 .pnp.*
 
 .parcel-cache/
-dist/
 .nyc_output/
 coverage/
