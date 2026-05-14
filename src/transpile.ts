@@ -157,8 +157,8 @@ export function babelPlugin(
     if (!loc) return;
 
     // Avoid instrumenting the same branch multiple times.
-    if (path.getData('isVisited')) return;
-    path.setData('isVisited', true);
+    if (path.getData('isVisitedBranch')) return;
+    path.setData('isVisitedBranch', true);
 
     // Skip if no child paths to process
     if (childPaths.length === 0) return;
@@ -388,7 +388,6 @@ export function babelPlugin(
           .map((p: any) => p.get('consequent.0'))
           .filter((p: any) => p?.node);
         registerBranch(path, 'switch', childPaths);
-        debugger;
       },
 
       LogicalExpression(path: any, state: any) {

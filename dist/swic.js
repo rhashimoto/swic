@@ -37889,8 +37889,8 @@ function babelPlugin({ template, types: t }, opts) {
   function registerBranch(path2, type, childPaths) {
     const loc = path2.node.loc;
     if (!loc) return;
-    if (path2.getData("isVisited")) return;
-    path2.setData("isVisited", true);
+    if (path2.getData("isVisitedBranch")) return;
+    path2.setData("isVisitedBranch", true);
     if (childPaths.length === 0) return;
     let fileIndex;
     let branchIndex;
@@ -38056,7 +38056,6 @@ function babelPlugin({ template, types: t }, opts) {
       SwitchStatement(path2, state) {
         const childPaths = path2.get("cases").map((p) => p.get("consequent.0")).filter((p) => p?.node);
         registerBranch(path2, "switch", childPaths);
-        debugger;
       },
       LogicalExpression(path2, state) {
         const childPaths = [path2.get("right")];
