@@ -392,21 +392,17 @@ export function babelPlugin(
       },
 
       LogicalExpression(path: any, state: any) {
-        const childPaths = [
-          path.get('left'),
-          path.get('right')].filter((p: any) => p?.node);
+        const childPaths = [path.get('right')];
         registerBranch(path, 'binary-expr', childPaths);
       },
 
       ConditionalExpression(path: any, state: any) {
-        const childPaths = [
-          path.get('consequent'),
-          path.get('alternate')].filter((p: any) => p?.node);
+        const childPaths = [path.get('consequent'), path.get('alternate')];
         registerBranch(path, 'cond-expr', childPaths);
       },
 
       AssignmentPattern(path: any, state: any) {
-        const childPaths = [path.get('right')].filter((p: any) => p?.node);
+        const childPaths = [path.get('right')];
         registerBranch(path, 'default-arg', childPaths);
       }
     }
