@@ -37830,16 +37830,19 @@ function babelPlugin({ template, types: t }, opts) {
   } else {
     mapPathToIndex.set(opts.path, 0);
   }
-  const makeStatementCall = template.statement(`
+  const makeStmtInjection = template.statement(`
     _swic_s[%%fileIndex%%][%%statementIndex%%]++;
   `);
-  const makeFnCall = template.statement(`
+  const makeFnInjection = template.statement(`
     _swic_f[%%fileIndex%%][%%fnIndex%%]++;
   `);
-  const makeBranchCall = template.statement(`
+  const makeBranchExpr = template.expression(`
+    (_swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++, %%originalExpr%%)
+  `);
+  const makeBranchStmt = template.statement(`
     _swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++;
   `);
-  function registerFunction(path2) {
+  function registerFn(path2) {
     const loc = path2.node.loc;
     if (!loc) return;
     if (path2.getData("isVisited")) return;
@@ -37877,11 +37880,85 @@ function babelPlugin({ template, types: t }, opts) {
         }
       });
     }
-    const callExpression = makeFnCall({
+    const injection = makeFnInjection({
       fileIndex: t.numericLiteral(fileIndex),
       fnIndex: t.numericLiteral(fnIndex)
     });
-    path2.get("body").insertBefore(callExpression);
+    path2.get("body").insertBefore(injection);
+  }
+  function registerBranch(path2, type, childPaths) {
+    const loc = path2.node.loc;
+    if (!loc) return;
+    if (path2.getData("isVisited")) return;
+    path2.setData("isVisited", true);
+    if (childPaths.length === 0) return;
+    let fileIndex;
+    let branchIndex;
+    const sourceMap = opts.sourceMap;
+    const branchLocations = [];
+    if (sourceMap) {
+      const start = originalPositionFor(sourceMap, loc.start);
+      const end = originalPositionFor(sourceMap, loc.end);
+      if (!start.source || !end.source) {
+        return;
+      }
+      const branchMap = opts.mapping.get(start.source).branchMap;
+      fileIndex = mapPathToIndex.get(start.source);
+      branchIndex = branchMap.length;
+      for (const childPath of childPaths) {
+        const loc2 = childPath.node.loc;
+        if (loc2) {
+          const start2 = originalPositionFor(sourceMap, loc2.start);
+          const end2 = originalPositionFor(sourceMap, loc2.end);
+          branchLocations.push({
+            start: { line: start2.line, column: start2.column },
+            end: { line: end2.line, column: end2.column }
+          });
+        }
+      }
+      branchMap.push({
+        type,
+        line: start.line,
+        locations: branchLocations
+      });
+    } else {
+      const branchMap = opts.mapping.get(opts.path).branchMap;
+      fileIndex = 0;
+      branchIndex = branchMap.length;
+      for (const childPath of childPaths) {
+        const loc2 = childPath.node.loc;
+        if (loc2) {
+          branchLocations.push({
+            start: { line: loc2.start.line, column: loc2.start.column },
+            end: { line: loc2.end.line, column: loc2.end.column }
+          });
+        }
+      }
+      branchMap.push({
+        type,
+        line: loc.start.line,
+        locations: branchLocations
+      });
+    }
+    for (let i = 0; i < childPaths.length; i++) {
+      const childPath = childPaths[i];
+      if (childPath.isExpression()) {
+        const injectionExpr = makeBranchExpr({
+          fileIndex: t.numericLiteral(fileIndex),
+          branchIndex: t.numericLiteral(branchIndex),
+          branchLocationIndex: t.numericLiteral(i),
+          originalExpr: childPath.node
+        });
+        childPath.replaceWith(injectionExpr);
+      } else {
+        const injectionStmt = makeBranchStmt({
+          fileIndex: t.numericLiteral(fileIndex),
+          branchIndex: t.numericLiteral(branchIndex),
+          branchLocationIndex: t.numericLiteral(i)
+        });
+        childPath.insertBefore(injectionStmt);
+      }
+    }
   }
   return {
     visitor: {
@@ -37898,9 +37975,9 @@ function babelPlugin({ template, types: t }, opts) {
           const preambleString = preamble.toString().replace("openIDB()", `${openIDB.toString()}()`);
           const shapes = [...mapPathToIndex.keys()].map((path3) => {
             return [path3, {
-              s: cvtCoverageMapToShape(opts.mapping.get(path3).statementMap),
-              f: cvtCoverageMapToShape(opts.mapping.get(path3).fnMap),
-              b: cvtCoverageMapToShape(opts.mapping.get(path3).branchMap)
+              s: opts.mapping.get(path3).statementMap.length,
+              f: opts.mapping.get(path3).fnMap.length,
+              b: opts.mapping.get(path3).branchMap.map((branch) => branch.locations.length)
             }];
           });
           const shapesString = JSON.stringify(shapes);
@@ -37947,32 +38024,60 @@ function babelPlugin({ template, types: t }, opts) {
             end: { line: loc.end.line, column: loc.end.column }
           });
         }
-        const callExpression = makeStatementCall({
+        const callExpression = makeStmtInjection({
           fileIndex: t.numericLiteral(fileIndex),
           statementIndex: t.numericLiteral(statementIndex)
         });
         path2.insertBefore(callExpression);
       },
       FunctionDeclaration(path2, state) {
-        registerFunction(path2);
+        registerFn(path2);
       },
       FunctionExpression(path2, state) {
-        registerFunction(path2);
+        registerFn(path2);
       },
       ObjectMethod(path2, state) {
-        registerFunction(path2);
+        registerFn(path2);
       },
       ClassMethod(path2, state) {
-        registerFunction(path2);
+        registerFn(path2);
       },
       ArrowFunctionExpression(path2, state) {
-        registerFunction(path2);
+        registerFn(path2);
+      },
+      IfStatement(path2, state) {
+        const childPaths = [path2.get("consequent")];
+        const alternatePath = path2.get("alternate");
+        if (alternatePath?.node && !alternatePath.isIfStatement()) {
+          childPaths.push(alternatePath);
+        }
+        registerBranch(path2, "if", childPaths);
+      },
+      SwitchStatement(path2, state) {
+        const childPaths = path2.get("cases").map((p) => p.get("consequent.0")).filter((p) => p?.node);
+        registerBranch(path2, "switch", childPaths);
+        debugger;
+      },
+      LogicalExpression(path2, state) {
+        const childPaths = [
+          path2.get("left"),
+          path2.get("right")
+        ].filter((p) => p?.node);
+        registerBranch(path2, "binary-expr", childPaths);
+      },
+      ConditionalExpression(path2, state) {
+        const childPaths = [
+          path2.get("consequent"),
+          path2.get("alternate")
+        ].filter((p) => p?.node);
+        registerBranch(path2, "cond-expr", childPaths);
+      },
+      AssignmentPattern(path2, state) {
+        const childPaths = [path2.get("right")].filter((p) => p?.node);
+        registerBranch(path2, "default-arg", childPaths);
       }
     }
   };
-}
-function cvtCoverageMapToShape(cm) {
-  return Array.isArray(cm[0]) ? cm.map((child) => cvtCoverageMapToShape(child)) : cm.length;
 }
 
 // src/format.ts
