@@ -215,7 +215,7 @@ describe("transpile", () => {
     await proxy(transpiled.code);
 
     const { counters } = await proxy('globalThis.__swic__');
-    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
+    expect(counters.get('/foo.js').b).toEqual([[0]]);
   });
 
   it("should count logical AND evaluated branch", async () => {
@@ -227,7 +227,7 @@ describe("transpile", () => {
     await proxy(transpiled.code);
 
     const { counters } = await proxy('globalThis.__swic__');
-    expect(counters.get('/foo.js').b).toEqual([[1, 1]]);
+    expect(counters.get('/foo.js').b).toEqual([[1]]);
   });
 
   it("should count logical OR short-circuit branch", async () => {
@@ -239,7 +239,7 @@ describe("transpile", () => {
     await proxy(transpiled.code);
 
     const { counters } = await proxy('globalThis.__swic__');
-    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
+    expect(counters.get('/foo.js').b).toEqual([[0]]);
   });
 
   it("should count logical OR evaluated branch", async () => {
@@ -251,7 +251,7 @@ describe("transpile", () => {
     await proxy(transpiled.code);
 
     const { counters } = await proxy('globalThis.__swic__');
-    expect(counters.get('/foo.js').b).toEqual([[1, 1]]);
+    expect(counters.get('/foo.js').b).toEqual([[1]]);
   });
 
   it("should count switch case branches", async () => {

@@ -38059,21 +38059,15 @@ function babelPlugin({ template, types: t }, opts) {
         debugger;
       },
       LogicalExpression(path2, state) {
-        const childPaths = [
-          path2.get("left"),
-          path2.get("right")
-        ].filter((p) => p?.node);
+        const childPaths = [path2.get("right")];
         registerBranch(path2, "binary-expr", childPaths);
       },
       ConditionalExpression(path2, state) {
-        const childPaths = [
-          path2.get("consequent"),
-          path2.get("alternate")
-        ].filter((p) => p?.node);
+        const childPaths = [path2.get("consequent"), path2.get("alternate")];
         registerBranch(path2, "cond-expr", childPaths);
       },
       AssignmentPattern(path2, state) {
-        const childPaths = [path2.get("right")].filter((p) => p?.node);
+        const childPaths = [path2.get("right")];
         registerBranch(path2, "default-arg", childPaths);
       }
     }
