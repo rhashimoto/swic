@@ -115,4 +115,194 @@ describe("transpile", () => {
     const { counters } = await proxy('globalThis.__swic__');
     expect(counters.get('/foo.js').f).toEqual([1]);
   });
+
+  it("should count static class methods", async () => {
+    const source = `
+      class Foo {
+        static method(x) { return x + 1; }
+      }
+      Foo.method(1);
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').f).toEqual([1]);
+  });
+
+  it("should count simple if branch", async () => {
+    const source = `
+      let foo = 0;
+      if (true) {
+        foo = 42;
+      }
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1]]);
+  });
+
+  it("should count if-else consequent branch", async () => {
+    const source = `
+      let foo = 0;
+      if (true) {
+        foo = 42;
+      } else {
+        foo = -1;
+      }
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
+  });
+
+  it("should count if-else alternate branch", async () => {
+    const source = `
+      let foo = 0;
+      if (false) {
+        foo = 42;
+      } else {
+        foo = -1;
+      }
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[0, 1]]);
+  });
+
+  it("should count ternary consequent branch", async () => {
+    const source = `
+      let foo = 0;
+      foo = true ? 42 : -1;
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
+  });
+
+  it("should count ternary alternate branch", async () => {
+    const source = `
+      let foo = 0;
+      foo = false ? 42 : -1;
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[0, 1]]);
+  });
+
+  it("should count logical AND short-circuit branch", async () => {
+    const source = `
+      let foo = false && 42;
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
+  });
+
+  it("should count logical AND evaluated branch", async () => {
+    const source = `
+      let foo = true && 42;
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 1]]);
+  });
+
+  it("should count logical OR short-circuit branch", async () => {
+    const source = `
+      let foo = true || -1;
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
+  });
+
+  it("should count logical OR evaluated branch", async () => {
+    const source = `
+      let foo = false || -1;
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 1]]);
+  });
+
+  it("should count switch case branches", async () => {
+    const source = `
+      let foo = 0;
+      switch (1) {
+        case 0:
+        case 1:
+          foo = 42;
+          break;
+        case 2:
+          break;
+        default:
+          foo = -2;
+      }
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 0, 0]]);
+  });
+
+  it("should count default parameter used branches", async () => {
+    const source = `
+      function foo(x = 42) {
+        return x;
+      }
+      foo();
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1]]);
+  });
+
+  it("should count default parameter unused branches", async () => {
+    const source = `
+      function foo(x = 42) {
+        return x;
+      }
+      foo(0);
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[0]]);
+  });
 });
