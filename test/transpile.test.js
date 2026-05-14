@@ -1,12 +1,118 @@
+import * as Comlink from 'comlink';
 import { transpile } from "../src/transpile";
 
 describe("transpile", () => {
+  /** @type {any} */ let proxy;
+  beforeEach(() => {
+    const worker = new Worker(new URL('./eval-worker.js', import.meta.url), { type: 'module' });
+    proxy = Comlink.wrap(worker);
+  });
+
+  afterEach(async () => {
+    proxy('globalThis.close()');
+    proxy[Comlink.releaseProxy]();
+  });
+
   it("should transpile", async () => {
     const source = `
       console.log('Hello, world!');
     `;
 
-    const transpiled = await transpile(new URL('file:///foo.js'), source);
-    expect(transpiled).toBeDefined();
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    expect(typeof transpiled).toBe('object');
+    expect(typeof transpiled.code).toBe('string');
+    expect(transpiled.mapping instanceof Map).toBe(true);
+  });
+
+  it("should produce executable code", async () => {
+    const source = `6 * 7;`;
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    const result = await proxy(transpiled.code);
+    expect(result).toBe(42);
+  });
+
+  it("should create counters", async () => {
+    const source = `6 * 7;`;
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+    
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters).toEqual(new Map([
+      ['/foo.js', { s: [1], f: [], b: [] }],
+    ]));
+  });
+
+  it("should count statements", async () => {
+    const source = `
+      let foo = 0;
+      for (let i = 0; i < 3; i++) {
+        foo += i;
+      }
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+    
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').s).toEqual([1, 1, 3]);
+  });
+
+  it("should count declared functions", async () => {
+    const source = `
+      function foo(x) { return x + 1;}
+      foo(1);
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').f).toEqual([1]);
+  });
+
+  it("should count anonymous functions", async () => {
+    const source = `
+      const foo = function(x) { return x + 1; }
+      foo(1);
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').f).toEqual([1]);
+  });
+
+  it("should count arrow functions", async () => {
+    const source = `
+      const foo = (x) => { return x + 1; };
+      const bar = (x) => x * x;
+      foo(1);
+      bar();
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').f).toEqual([1, 1]);
+  });
+
+  it("should count methods", async () => {
+    const source = `
+      class Foo {
+        method(x) { return x + 1; }
+      }
+      const foo = new Foo();
+      foo.method(1);
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').f).toEqual([1]);
   });
 });
