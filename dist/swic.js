@@ -37684,14 +37684,14 @@ function preamble(shapes) {
   });
   if (isPrimary) {
     let mergeCounts = function(src, dst) {
-      if (typeof src[0] === "number") {
+      if (Array.isArray(src[0])) {
         for (let i = 0; i < src.length; i++) {
-          dst[i] += src[i];
-          src[i] = 0;
+          mergeCounts(src[i], dst[i]);
         }
       } else {
         for (let i = 0; i < src.length; i++) {
-          mergeCounts(src[i], dst[i]);
+          dst[i] += src[i];
+          src[i] = 0;
         }
       }
     };
@@ -37701,8 +37701,7 @@ function preamble(shapes) {
       const tx = db.transaction("counts", "readwrite");
       const countsStore = tx.objectStore("counts");
       const entries = Array.from(contextState.counters.entries());
-      for (let i = 0; i < entries.length; i++) {
-        const [path2, counters] = entries[i];
+      await Promise.all(entries.map(async ([path2, counters]) => {
         const existing = await new Promise((resolve, reject) => {
           const request = countsStore.get(path2);
           request.onsuccess = () => {
@@ -37727,7 +37726,7 @@ function preamble(shapes) {
         mergeCounts(counters.f, existing.f);
         mergeCounts(counters.b, existing.b);
         countsStore.put(existing);
-      }
+      }));
       await new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve(void 0);
         tx.onerror = () => reject(tx.error);

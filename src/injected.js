@@ -79,15 +79,15 @@ export function preamble(shapes) {
     // This convenience function adds the counts in possibly nested
     // arrays of the same "shape", storing the result in dst and
     // resetting src to zeros.
-    function mergeCounts(/** @type {any} */ src, /** @type {any} */ dst) {
-      if (typeof src[0] === 'number') {
+    function mergeCounts(/** @type {any[]} */ src, /** @type {any[]} */ dst) {
+      if (Array.isArray(src[0])) {
         for (let i = 0; i < src.length; i++) {
-          dst[i] += src[i];
-          src[i] = 0;
+          mergeCounts(src[i], dst[i]);
         }
       } else {
         for (let i = 0; i < src.length; i++) {
-          mergeCounts(src[i], dst[i]);
+          dst[i] += src[i];
+          src[i] = 0;
         }
       }
     }
@@ -99,10 +99,10 @@ export function preamble(shapes) {
       const countsStore = tx.objectStore('counts');
 
       // Loop over the source files instrumented in this context.
+      // Use parallel IndexedDB requests to reduce overall latency.
       const entries = Array.from(contextState.counters.entries());
-      for (let i = 0; i < entries.length; i++) {
+      await Promise.all(entries.map(async ([path, counters]) => {
         // Fetch the existing counts for this file from IndexedDB.
-        const [path, counters] = entries[i];
         const existing = await new Promise((resolve, reject) => {
           const request = countsStore.get(path);
           request.onsuccess = () => {
@@ -110,7 +110,7 @@ export function preamble(shapes) {
               resolve(request.result);
             } else {
               // No existing counts, so initialize a set.
-              const shape = /** @type {any} */(contextState.shapes.get(path));
+              const shape = /** @type {any} */ (contextState.shapes.get(path));
               resolve({
                 path,
                 s: cvtShapeToCoverageCounters(shape.s),
@@ -127,7 +127,8 @@ export function preamble(shapes) {
         mergeCounts(counters.f, existing.f);
         mergeCounts(counters.b, existing.b);
         countsStore.put(existing);
-      }
+      }));
+
       await new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve(undefined);
         tx.onerror = () => reject(tx.error);
