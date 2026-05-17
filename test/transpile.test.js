@@ -258,7 +258,6 @@ describe("transpile", () => {
     const source = `
       let foo = 0;
       switch (1) {
-        case 0:
         case 1:
           foo = 42;
           break;
@@ -274,6 +273,46 @@ describe("transpile", () => {
 
     const { counters } = await proxy('globalThis.__swic__');
     expect(counters.get('/foo.js').b).toEqual([[1, 0, 0]]);
+  });
+
+  it("should count switch default case branch", async () => {
+    const source = `
+      let foo = 0;
+      switch (3) {
+        case 1:
+          break;
+        case 2:
+          break;
+        default:
+          foo = -2;
+      }
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[0, 0, 1]]);
+  });
+
+  it("should count switch fallthrough branches", async () => {
+    const source = `
+      let foo = 0;
+      switch (1) {
+        case 1:
+        case 2:
+          foo += 2;
+          break;
+        default:
+          foo += 4;
+      }
+    `.trim();
+
+    const transpiled = await transpile(new URL('/foo.js', import.meta.url), source);
+    await proxy(transpiled.code);
+
+    const { counters } = await proxy('globalThis.__swic__');
+    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
   });
 
   it("should count default parameter used branches", async () => {

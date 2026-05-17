@@ -183,7 +183,8 @@ export function babelPlugin(
       branchIndex = branchMap.length;
 
       // Populate locations for each child path
-      for (const childPath of childPaths) {
+      for (let i = 0; i < childPaths.length; i++) {
+        const childPath = childPaths[i];
         const loc = childPath.node.loc;
         if (loc) {
           const start = originalPositionFor(sourceMap, loc.start);
@@ -192,6 +193,7 @@ export function babelPlugin(
             start: { line: start.line, column: start.column },
             end: { line: end.line, column: end.column }
           });
+          injectBranchCounter(childPath, i);
         }
       }
 
@@ -206,13 +208,15 @@ export function babelPlugin(
       branchIndex = branchMap.length;
 
       // Populate locations for each child path
-      for (const childPath of childPaths) {
+      for (let i = 0; i < childPaths.length; i++) {
+        const childPath = childPaths[i];
         const loc = childPath.node.loc;
         if (loc) {
           branchLocations.push({
             start: { line: loc.start.line, column: loc.start.column },
             end: { line: loc.end.line, column: loc.end.column }
           });
+          injectBranchCounter(childPath, i);
         }
       }
 
@@ -223,16 +227,14 @@ export function babelPlugin(
       });
     }
 
-    // Inject instrumentation code for each branch path
-    for (let i = 0; i < childPaths.length; i++) {
-      const childPath = childPaths[i];
+    function injectBranchCounter(childPath: any, locationIndex: number) {
       if (childPath.isExpression()) {
         // For expressions, we need to replace them with a sequence expression
         // that includes the original expression and the instrumentation call.
         const injectionExpr = makeBranchExpr({
           fileIndex: t.numericLiteral(fileIndex),
           branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(i),
+          branchLocationIndex: t.numericLiteral(locationIndex),
           originalExpr: childPath.node
         });
         childPath.replaceWith(injectionExpr);
@@ -240,7 +242,7 @@ export function babelPlugin(
         const injectionStmt = makeBranchStmt({
           fileIndex: t.numericLiteral(fileIndex),
           branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(i)
+          branchLocationIndex: t.numericLiteral(locationIndex)
         });
         childPath.insertBefore(injectionStmt);
       }

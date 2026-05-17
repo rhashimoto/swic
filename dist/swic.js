@@ -37904,7 +37904,8 @@ function babelPlugin({ template, types: t }, opts) {
       const branchMap = opts.mapping.get(start.source).branchMap;
       fileIndex = mapPathToIndex.get(start.source);
       branchIndex = branchMap.length;
-      for (const childPath of childPaths) {
+      for (let i = 0; i < childPaths.length; i++) {
+        const childPath = childPaths[i];
         const loc2 = childPath.node.loc;
         if (loc2) {
           const start2 = originalPositionFor(sourceMap, loc2.start);
@@ -37913,6 +37914,7 @@ function babelPlugin({ template, types: t }, opts) {
             start: { line: start2.line, column: start2.column },
             end: { line: end2.line, column: end2.column }
           });
+          injectBranchCounter(childPath, i);
         }
       }
       branchMap.push({
@@ -37924,13 +37926,15 @@ function babelPlugin({ template, types: t }, opts) {
       const branchMap = opts.mapping.get(opts.path).branchMap;
       fileIndex = 0;
       branchIndex = branchMap.length;
-      for (const childPath of childPaths) {
+      for (let i = 0; i < childPaths.length; i++) {
+        const childPath = childPaths[i];
         const loc2 = childPath.node.loc;
         if (loc2) {
           branchLocations.push({
             start: { line: loc2.start.line, column: loc2.start.column },
             end: { line: loc2.end.line, column: loc2.end.column }
           });
+          injectBranchCounter(childPath, i);
         }
       }
       branchMap.push({
@@ -37939,13 +37943,12 @@ function babelPlugin({ template, types: t }, opts) {
         locations: branchLocations
       });
     }
-    for (let i = 0; i < childPaths.length; i++) {
-      const childPath = childPaths[i];
+    function injectBranchCounter(childPath, locationIndex) {
       if (childPath.isExpression()) {
         const injectionExpr = makeBranchExpr({
           fileIndex: t.numericLiteral(fileIndex),
           branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(i),
+          branchLocationIndex: t.numericLiteral(locationIndex),
           originalExpr: childPath.node
         });
         childPath.replaceWith(injectionExpr);
@@ -37953,7 +37956,7 @@ function babelPlugin({ template, types: t }, opts) {
         const injectionStmt = makeBranchStmt({
           fileIndex: t.numericLiteral(fileIndex),
           branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(i)
+          branchLocationIndex: t.numericLiteral(locationIndex)
         });
         childPath.insertBefore(injectionStmt);
       }
@@ -38151,7 +38154,6 @@ self.addEventListener("fetch", (event) => {
       if (fetchedETag) {
         const cachedResponse = await cache.match(event.request);
         if (cachedResponse && cachedResponse.headers.get("etag") === fetchedETag) {
-          return cachedResponse;
         }
       }
       const responseBytes = await response.arrayBuffer();
