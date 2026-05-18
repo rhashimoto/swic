@@ -1,5 +1,3 @@
-import { openIDB } from "./persistence.js";
-
 // This function will be converted to a string and injected into the
 // instrumented code. Writing it as a real function allows using
 // IDE features and makes it easier to maintain.
@@ -92,7 +90,11 @@ export function preamble(shapes) {
       }
     }
 
-    const dbPromise = openIDB();
+    const dbPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open('swic', 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
     async function saveCounts() {
       const db = await dbPromise;
       const tx = db.transaction('counts', 'readwrite');

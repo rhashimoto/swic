@@ -1,16 +1,13 @@
 import { wrap } from "idb";
 
-/** @import { Config, CoverageMaps, CoverageCounts } from "./types/index" */
+import { Config, CoverageMaps, CoverageCounts } from "./types/index"
 
 const dbPromise = openIDB().then(db => wrap(db));
 
 const SOURCE_CACHE_NAME = 'swic-cache-sources';
 const cachePromise = caches.open(SOURCE_CACHE_NAME);
 
-/**
- * @returns {Promise<IDBDatabase>}
- */
-export function openIDB() {
+export function openIDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('swic', 1);
     request.onupgradeneeded = () => {
@@ -24,20 +21,14 @@ export function openIDB() {
   });
 }
 
-/**
- * @param {Config} config
- */
-export async function putConfig(config) {
+export async function putConfig(config: Config) {
   const db = await dbPromise;
   const tx = db.transaction('kv', 'readwrite');
   tx.objectStore('kv').put(config, 'config');
   tx.commit();
 }
 
-/**
- * @returns {Promise<Config>}
- */
-export async function getConfig() {
+export async function getConfig(): Promise<Config> {
   const db = await dbPromise;
   const tx = db.transaction('kv', 'readonly');
   const config = await tx.objectStore('kv').get('config');
@@ -55,10 +46,7 @@ export async function clearDB() {
   cache.keys().then(keys => Promise.all(keys.map(key => cache.delete(key))));
 }
 
-/**
- * @returns {Promise<{ maps: CoverageMaps[], counts: CoverageCounts[] }>}
- */
-export async function loadDataFromDB() {
+export async function loadDataFromDB(): Promise<{ maps: CoverageMaps[], counts: CoverageCounts[] }> {
   const db = await dbPromise;
   const storeNames = ['maps', 'counts'];
   const tx = db.transaction(storeNames, 'readonly');
@@ -69,10 +57,7 @@ export async function loadDataFromDB() {
   return Object.fromEntries(objectEntries);
 }
 
-/**
- * @param {Iterable<[string, CoverageMaps]>} maps
- */
-export async function saveMapsToDB(maps) {
+export async function saveMapsToDB(maps: Iterable<[string, CoverageMaps]>) {
   const [db, cache] = await Promise.all([dbPromise, cachePromise]);
 
   // Determine if any of the source files have changed by comparing ETags.

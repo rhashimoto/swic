@@ -37049,7 +37049,7 @@ function buildPathMatcher(match2) {
 }
 
 // src/transpile.ts
-var import_babel_min16 = __toESM(require_babel_min());
+var import_babel_min14 = __toESM(require_babel_min());
 var MaybeBabel = __toESM(require_babel_min());
 
 // ../.yarn/berry/cache/@jridgewell-trace-mapping-npm-0.3.31-1ae81d75ac-10c0.zip/node_modules/@jridgewell/trace-mapping/dist/trace-mapping.mjs
@@ -37343,302 +37343,7 @@ function traceSegmentInternal(segments, memo, line, column, bias) {
 }
 
 // src/injected.js
-var import_babel_min14 = __toESM(require_babel_min());
-
-// src/persistence.js
-var import_babel_min13 = __toESM(require_babel_min());
-
-// ../.yarn/berry/cache/idb-npm-8.0.3-e9b0a844f6-10c0.zip/node_modules/idb/build/index.js
-var import_babel_min12 = __toESM(require_babel_min(), 1);
-var instanceOfAny = (object, constructors) => constructors.some((c) => object instanceof c);
-var idbProxyableTypes;
-var cursorAdvanceMethods;
-function getIdbProxyableTypes() {
-  return idbProxyableTypes || (idbProxyableTypes = [
-    IDBDatabase,
-    IDBObjectStore,
-    IDBIndex,
-    IDBCursor,
-    IDBTransaction
-  ]);
-}
-function getCursorAdvanceMethods() {
-  return cursorAdvanceMethods || (cursorAdvanceMethods = [
-    IDBCursor.prototype.advance,
-    IDBCursor.prototype.continue,
-    IDBCursor.prototype.continuePrimaryKey
-  ]);
-}
-var transactionDoneMap = /* @__PURE__ */ new WeakMap();
-var transformCache = /* @__PURE__ */ new WeakMap();
-var reverseTransformCache = /* @__PURE__ */ new WeakMap();
-function promisifyRequest(request) {
-  const promise = new Promise((resolve, reject) => {
-    const unlisten = () => {
-      request.removeEventListener("success", success);
-      request.removeEventListener("error", error);
-    };
-    const success = () => {
-      resolve(wrap(request.result));
-      unlisten();
-    };
-    const error = () => {
-      reject(request.error);
-      unlisten();
-    };
-    request.addEventListener("success", success);
-    request.addEventListener("error", error);
-  });
-  reverseTransformCache.set(promise, request);
-  return promise;
-}
-function cacheDonePromiseForTransaction(tx) {
-  if (transactionDoneMap.has(tx))
-    return;
-  const done = new Promise((resolve, reject) => {
-    const unlisten = () => {
-      tx.removeEventListener("complete", complete);
-      tx.removeEventListener("error", error);
-      tx.removeEventListener("abort", error);
-    };
-    const complete = () => {
-      resolve();
-      unlisten();
-    };
-    const error = () => {
-      reject(tx.error || new DOMException("AbortError", "AbortError"));
-      unlisten();
-    };
-    tx.addEventListener("complete", complete);
-    tx.addEventListener("error", error);
-    tx.addEventListener("abort", error);
-  });
-  transactionDoneMap.set(tx, done);
-}
-var idbProxyTraps = {
-  get(target, prop, receiver) {
-    if (target instanceof IDBTransaction) {
-      if (prop === "done")
-        return transactionDoneMap.get(target);
-      if (prop === "store") {
-        return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
-      }
-    }
-    return wrap(target[prop]);
-  },
-  set(target, prop, value2) {
-    target[prop] = value2;
-    return true;
-  },
-  has(target, prop) {
-    if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
-      return true;
-    }
-    return prop in target;
-  }
-};
-function replaceTraps(callback) {
-  idbProxyTraps = callback(idbProxyTraps);
-}
-function wrapFunction(func) {
-  if (getCursorAdvanceMethods().includes(func)) {
-    return function(...args) {
-      func.apply(unwrap(this), args);
-      return wrap(this.request);
-    };
-  }
-  return function(...args) {
-    return wrap(func.apply(unwrap(this), args));
-  };
-}
-function transformCachableValue(value2) {
-  if (typeof value2 === "function")
-    return wrapFunction(value2);
-  if (value2 instanceof IDBTransaction)
-    cacheDonePromiseForTransaction(value2);
-  if (instanceOfAny(value2, getIdbProxyableTypes()))
-    return new Proxy(value2, idbProxyTraps);
-  return value2;
-}
-function wrap(value2) {
-  if (value2 instanceof IDBRequest)
-    return promisifyRequest(value2);
-  if (transformCache.has(value2))
-    return transformCache.get(value2);
-  const newValue = transformCachableValue(value2);
-  if (newValue !== value2) {
-    transformCache.set(value2, newValue);
-    reverseTransformCache.set(newValue, value2);
-  }
-  return newValue;
-}
-var unwrap = (value2) => reverseTransformCache.get(value2);
-var readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
-var writeMethods = ["put", "add", "delete", "clear"];
-var cachedMethods = /* @__PURE__ */ new Map();
-function getMethod(target, prop) {
-  if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
-    return;
-  }
-  if (cachedMethods.get(prop))
-    return cachedMethods.get(prop);
-  const targetFuncName = prop.replace(/FromIndex$/, "");
-  const useIndex = prop !== targetFuncName;
-  const isWrite = writeMethods.includes(targetFuncName);
-  if (
-    // Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
-    !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))
-  ) {
-    return;
-  }
-  const method = async function(storeName, ...args) {
-    const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
-    let target2 = tx.store;
-    if (useIndex)
-      target2 = target2.index(args.shift());
-    return (await Promise.all([
-      target2[targetFuncName](...args),
-      isWrite && tx.done
-    ]))[0];
-  };
-  cachedMethods.set(prop, method);
-  return method;
-}
-replaceTraps((oldTraps) => ({
-  ...oldTraps,
-  get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
-  has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
-}));
-var advanceMethodProps = ["continue", "continuePrimaryKey", "advance"];
-var methodMap = {};
-var advanceResults = /* @__PURE__ */ new WeakMap();
-var ittrProxiedCursorToOriginalProxy = /* @__PURE__ */ new WeakMap();
-var cursorIteratorTraps = {
-  get(target, prop) {
-    if (!advanceMethodProps.includes(prop))
-      return target[prop];
-    let cachedFunc = methodMap[prop];
-    if (!cachedFunc) {
-      cachedFunc = methodMap[prop] = function(...args) {
-        advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
-      };
-    }
-    return cachedFunc;
-  }
-};
-async function* iterate(...args) {
-  let cursor = this;
-  if (!(cursor instanceof IDBCursor)) {
-    cursor = await cursor.openCursor(...args);
-  }
-  if (!cursor)
-    return;
-  cursor = cursor;
-  const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
-  ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
-  reverseTransformCache.set(proxiedCursor, unwrap(cursor));
-  while (cursor) {
-    yield proxiedCursor;
-    cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
-    advanceResults.delete(proxiedCursor);
-  }
-}
-function isIteratorProp(target, prop) {
-  return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
-}
-replaceTraps((oldTraps) => ({
-  ...oldTraps,
-  get(target, prop, receiver) {
-    if (isIteratorProp(target, prop))
-      return iterate;
-    return oldTraps.get(target, prop, receiver);
-  },
-  has(target, prop) {
-    return isIteratorProp(target, prop) || oldTraps.has(target, prop);
-  }
-}));
-
-// src/persistence.js
-var dbPromise = openIDB().then((db) => wrap(db));
-var SOURCE_CACHE_NAME = "swic-cache-sources";
-var cachePromise = caches.open(SOURCE_CACHE_NAME);
-function openIDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("swic", 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      db.createObjectStore("kv");
-      db.createObjectStore("maps", { keyPath: "path" });
-      db.createObjectStore("counts", { keyPath: "path" });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-async function putConfig(config2) {
-  const db = await dbPromise;
-  const tx = db.transaction("kv", "readwrite");
-  tx.objectStore("kv").put(config2, "config");
-  tx.commit();
-}
-async function getConfig() {
-  const db = await dbPromise;
-  const tx = db.transaction("kv", "readonly");
-  const config2 = await tx.objectStore("kv").get("config");
-  return config2 || { isEnabled: false, match: [] };
-}
-async function clearDB() {
-  const db = await dbPromise;
-  const tx = db.transaction(["maps", "counts"], "readwrite");
-  Array.from(tx.objectStoreNames).forEach((storeName) => {
-    tx.objectStore(storeName).clear();
-  });
-  const cache = await cachePromise;
-  cache.keys().then((keys) => Promise.all(keys.map((key) => cache.delete(key))));
-}
-async function loadDataFromDB() {
-  const db = await dbPromise;
-  const storeNames = ["maps", "counts"];
-  const tx = db.transaction(storeNames, "readonly");
-  const objectEntries = await Promise.all(storeNames.map((storeName) => {
-    const store = tx.objectStore(storeName);
-    return store.getAll().then((results) => [storeName, results]);
-  }));
-  return Object.fromEntries(objectEntries);
-}
-async function saveMapsToDB(maps) {
-  const [db, cache] = await Promise.all([dbPromise, cachePromise]);
-  const contentChanged = /* @__PURE__ */ new Set();
-  await Promise.all(Array.from(maps, async ([path2]) => {
-    const request = new Request(path2);
-    const cachedResponse = await cache.match(request);
-    const response = await fetch(request, { method: "HEAD" });
-    if (response.ok) {
-      const eTag = response.headers.get("ETag");
-      if (eTag && eTag !== cachedResponse?.headers.get("ETag")) {
-        contentChanged.add(path2);
-        cache.put(request, response);
-      }
-    }
-  }));
-  const tx = db.transaction(["maps", "counts"], "readwrite");
-  const mapsStore = tx.objectStore("maps");
-  const countsStore = tx.objectStore("counts");
-  for (const [path2, mapping] of maps) {
-    mapsStore.put({
-      path: path2,
-      statementMap: mapping.statementMap,
-      fnMap: mapping.fnMap,
-      branchMap: mapping.branchMap
-    });
-    if (contentChanged.has(path2)) {
-      countsStore.delete(path2);
-    }
-  }
-  await tx.done;
-}
-
-// src/injected.js
+var import_babel_min12 = __toESM(require_babel_min());
 function preamble(shapes) {
   const sources = shapes.map(([path2]) => path2);
   let isPrimary = false;
@@ -37695,7 +37400,11 @@ function preamble(shapes) {
         }
       }
     };
-    const dbPromise2 = openIDB();
+    const dbPromise2 = new Promise((resolve, reject) => {
+      const request = indexedDB.open("swic", 1);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
     async function saveCounts() {
       const db = await dbPromise2;
       const tx = db.transaction("counts", "readwrite");
@@ -37751,7 +37460,7 @@ function preamble(shapes) {
 }
 
 // src/sourcemap.ts
-var import_babel_min15 = __toESM(require_babel_min());
+var import_babel_min13 = __toESM(require_babel_min());
 async function getSourceMap(url, source) {
   try {
     const match2 = source.match(/\/\/#\s*sourceMappingURL=(.+?)(?:\s|$)/);
@@ -37969,7 +37678,6 @@ function babelPlugin({ template, types: t }, opts) {
           }]));
         },
         exit(path2, state) {
-          const preambleString = preamble.toString().replace("openIDB()", `${openIDB.toString()}()`);
           const shapes = [...mapPathToIndex.keys()].map((path3) => {
             return [path3, {
               s: opts.mapping.get(path3).statementMap.length,
@@ -37980,7 +37688,7 @@ function babelPlugin({ template, types: t }, opts) {
           const shapesString = JSON.stringify(shapes);
           const makeProgramWrapper = template.statements(`
             const { s: _swic_s, f: _swic_f, b: _swic_b } =
-              (${preambleString})(${shapesString});
+              (${preamble.toString()})(${shapesString});
             %%BODY%%
           `);
           path2.node.body = makeProgramWrapper({
@@ -38068,6 +37776,299 @@ function babelPlugin({ template, types: t }, opts) {
       }
     }
   };
+}
+
+// src/persistence.ts
+var import_babel_min16 = __toESM(require_babel_min());
+
+// ../.yarn/berry/cache/idb-npm-8.0.3-e9b0a844f6-10c0.zip/node_modules/idb/build/index.js
+var import_babel_min15 = __toESM(require_babel_min(), 1);
+var instanceOfAny = (object, constructors) => constructors.some((c) => object instanceof c);
+var idbProxyableTypes;
+var cursorAdvanceMethods;
+function getIdbProxyableTypes() {
+  return idbProxyableTypes || (idbProxyableTypes = [
+    IDBDatabase,
+    IDBObjectStore,
+    IDBIndex,
+    IDBCursor,
+    IDBTransaction
+  ]);
+}
+function getCursorAdvanceMethods() {
+  return cursorAdvanceMethods || (cursorAdvanceMethods = [
+    IDBCursor.prototype.advance,
+    IDBCursor.prototype.continue,
+    IDBCursor.prototype.continuePrimaryKey
+  ]);
+}
+var transactionDoneMap = /* @__PURE__ */ new WeakMap();
+var transformCache = /* @__PURE__ */ new WeakMap();
+var reverseTransformCache = /* @__PURE__ */ new WeakMap();
+function promisifyRequest(request) {
+  const promise = new Promise((resolve, reject) => {
+    const unlisten = () => {
+      request.removeEventListener("success", success);
+      request.removeEventListener("error", error);
+    };
+    const success = () => {
+      resolve(wrap(request.result));
+      unlisten();
+    };
+    const error = () => {
+      reject(request.error);
+      unlisten();
+    };
+    request.addEventListener("success", success);
+    request.addEventListener("error", error);
+  });
+  reverseTransformCache.set(promise, request);
+  return promise;
+}
+function cacheDonePromiseForTransaction(tx) {
+  if (transactionDoneMap.has(tx))
+    return;
+  const done = new Promise((resolve, reject) => {
+    const unlisten = () => {
+      tx.removeEventListener("complete", complete);
+      tx.removeEventListener("error", error);
+      tx.removeEventListener("abort", error);
+    };
+    const complete = () => {
+      resolve();
+      unlisten();
+    };
+    const error = () => {
+      reject(tx.error || new DOMException("AbortError", "AbortError"));
+      unlisten();
+    };
+    tx.addEventListener("complete", complete);
+    tx.addEventListener("error", error);
+    tx.addEventListener("abort", error);
+  });
+  transactionDoneMap.set(tx, done);
+}
+var idbProxyTraps = {
+  get(target, prop, receiver) {
+    if (target instanceof IDBTransaction) {
+      if (prop === "done")
+        return transactionDoneMap.get(target);
+      if (prop === "store") {
+        return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
+      }
+    }
+    return wrap(target[prop]);
+  },
+  set(target, prop, value2) {
+    target[prop] = value2;
+    return true;
+  },
+  has(target, prop) {
+    if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
+      return true;
+    }
+    return prop in target;
+  }
+};
+function replaceTraps(callback) {
+  idbProxyTraps = callback(idbProxyTraps);
+}
+function wrapFunction(func) {
+  if (getCursorAdvanceMethods().includes(func)) {
+    return function(...args) {
+      func.apply(unwrap(this), args);
+      return wrap(this.request);
+    };
+  }
+  return function(...args) {
+    return wrap(func.apply(unwrap(this), args));
+  };
+}
+function transformCachableValue(value2) {
+  if (typeof value2 === "function")
+    return wrapFunction(value2);
+  if (value2 instanceof IDBTransaction)
+    cacheDonePromiseForTransaction(value2);
+  if (instanceOfAny(value2, getIdbProxyableTypes()))
+    return new Proxy(value2, idbProxyTraps);
+  return value2;
+}
+function wrap(value2) {
+  if (value2 instanceof IDBRequest)
+    return promisifyRequest(value2);
+  if (transformCache.has(value2))
+    return transformCache.get(value2);
+  const newValue = transformCachableValue(value2);
+  if (newValue !== value2) {
+    transformCache.set(value2, newValue);
+    reverseTransformCache.set(newValue, value2);
+  }
+  return newValue;
+}
+var unwrap = (value2) => reverseTransformCache.get(value2);
+var readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
+var writeMethods = ["put", "add", "delete", "clear"];
+var cachedMethods = /* @__PURE__ */ new Map();
+function getMethod(target, prop) {
+  if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
+    return;
+  }
+  if (cachedMethods.get(prop))
+    return cachedMethods.get(prop);
+  const targetFuncName = prop.replace(/FromIndex$/, "");
+  const useIndex = prop !== targetFuncName;
+  const isWrite = writeMethods.includes(targetFuncName);
+  if (
+    // Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
+    !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))
+  ) {
+    return;
+  }
+  const method = async function(storeName, ...args) {
+    const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
+    let target2 = tx.store;
+    if (useIndex)
+      target2 = target2.index(args.shift());
+    return (await Promise.all([
+      target2[targetFuncName](...args),
+      isWrite && tx.done
+    ]))[0];
+  };
+  cachedMethods.set(prop, method);
+  return method;
+}
+replaceTraps((oldTraps) => ({
+  ...oldTraps,
+  get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
+  has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
+}));
+var advanceMethodProps = ["continue", "continuePrimaryKey", "advance"];
+var methodMap = {};
+var advanceResults = /* @__PURE__ */ new WeakMap();
+var ittrProxiedCursorToOriginalProxy = /* @__PURE__ */ new WeakMap();
+var cursorIteratorTraps = {
+  get(target, prop) {
+    if (!advanceMethodProps.includes(prop))
+      return target[prop];
+    let cachedFunc = methodMap[prop];
+    if (!cachedFunc) {
+      cachedFunc = methodMap[prop] = function(...args) {
+        advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
+      };
+    }
+    return cachedFunc;
+  }
+};
+async function* iterate(...args) {
+  let cursor = this;
+  if (!(cursor instanceof IDBCursor)) {
+    cursor = await cursor.openCursor(...args);
+  }
+  if (!cursor)
+    return;
+  cursor = cursor;
+  const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
+  ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
+  reverseTransformCache.set(proxiedCursor, unwrap(cursor));
+  while (cursor) {
+    yield proxiedCursor;
+    cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
+    advanceResults.delete(proxiedCursor);
+  }
+}
+function isIteratorProp(target, prop) {
+  return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
+}
+replaceTraps((oldTraps) => ({
+  ...oldTraps,
+  get(target, prop, receiver) {
+    if (isIteratorProp(target, prop))
+      return iterate;
+    return oldTraps.get(target, prop, receiver);
+  },
+  has(target, prop) {
+    return isIteratorProp(target, prop) || oldTraps.has(target, prop);
+  }
+}));
+
+// src/persistence.ts
+var dbPromise = openIDB().then((db) => wrap(db));
+var SOURCE_CACHE_NAME = "swic-cache-sources";
+var cachePromise = caches.open(SOURCE_CACHE_NAME);
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("swic", 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      db.createObjectStore("kv");
+      db.createObjectStore("maps", { keyPath: "path" });
+      db.createObjectStore("counts", { keyPath: "path" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function putConfig(config2) {
+  const db = await dbPromise;
+  const tx = db.transaction("kv", "readwrite");
+  tx.objectStore("kv").put(config2, "config");
+  tx.commit();
+}
+async function getConfig() {
+  const db = await dbPromise;
+  const tx = db.transaction("kv", "readonly");
+  const config2 = await tx.objectStore("kv").get("config");
+  return config2 || { isEnabled: false, match: [] };
+}
+async function clearDB() {
+  const db = await dbPromise;
+  const tx = db.transaction(["maps", "counts"], "readwrite");
+  Array.from(tx.objectStoreNames).forEach((storeName) => {
+    tx.objectStore(storeName).clear();
+  });
+  const cache = await cachePromise;
+  cache.keys().then((keys) => Promise.all(keys.map((key) => cache.delete(key))));
+}
+async function loadDataFromDB() {
+  const db = await dbPromise;
+  const storeNames = ["maps", "counts"];
+  const tx = db.transaction(storeNames, "readonly");
+  const objectEntries = await Promise.all(storeNames.map((storeName) => {
+    const store = tx.objectStore(storeName);
+    return store.getAll().then((results) => [storeName, results]);
+  }));
+  return Object.fromEntries(objectEntries);
+}
+async function saveMapsToDB(maps) {
+  const [db, cache] = await Promise.all([dbPromise, cachePromise]);
+  const contentChanged = /* @__PURE__ */ new Set();
+  await Promise.all(Array.from(maps, async ([path2]) => {
+    const request = new Request(path2);
+    const cachedResponse = await cache.match(request);
+    const response = await fetch(request, { method: "HEAD" });
+    if (response.ok) {
+      const eTag = response.headers.get("ETag");
+      if (eTag && eTag !== cachedResponse?.headers.get("ETag")) {
+        contentChanged.add(path2);
+        cache.put(request, response);
+      }
+    }
+  }));
+  const tx = db.transaction(["maps", "counts"], "readwrite");
+  const mapsStore = tx.objectStore("maps");
+  const countsStore = tx.objectStore("counts");
+  for (const [path2, mapping] of maps) {
+    mapsStore.put({
+      path: path2,
+      statementMap: mapping.statementMap,
+      fnMap: mapping.fnMap,
+      branchMap: mapping.branchMap
+    });
+    if (contentChanged.has(path2)) {
+      countsStore.delete(path2);
+    }
+  }
+  await tx.done;
 }
 
 // src/format.ts

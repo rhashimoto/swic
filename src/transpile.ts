@@ -261,13 +261,6 @@ export function babelPlugin(
         },
 
         exit(path: any, state: any) {
-          // Create the preamble function to prepend to the script. The
-          // openIDB() function is needed in both the service worker and
-          // the preamble, so it is converted to a string and inlined to
-          // avoid repeating the code in multiple places.
-          const preambleString = preamble.toString()
-            .replace('openIDB()', `${openIDB.toString()}()`);
-
           // The argument to the preamble specifies the source files and
           // the the data structures to hold the counts, which is derived
           // from the structure of the coverage maps.
@@ -280,9 +273,11 @@ export function babelPlugin(
           });
           const shapesString = JSON.stringify(shapes);
 
+          // The modified script will call the preamble function with the
+          // coverage data shapes.
           const makeProgramWrapper = template.statements(`
             const { s: _swic_s, f: _swic_f, b: _swic_b } =
-              (${preambleString})(${shapesString});
+              (${preamble.toString()})(${shapesString});
             %%BODY%%
           `);
           path.node.body = makeProgramWrapper({
