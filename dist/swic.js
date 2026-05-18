@@ -37836,10 +37836,7 @@ function babelPlugin({ template, types: t }, opts) {
     _swic_f[%%fileIndex%%][%%fnIndex%%]++;
   `);
   const makeBranchExpr = template.expression(`
-    (_swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++, %%originalExpr%%)
-  `);
-  const makeBranchStmt = template.statement(`
-    _swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++;
+    _swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++
   `);
   function registerFn(path2) {
     const loc = path2.node.loc;
@@ -37944,21 +37941,19 @@ function babelPlugin({ template, types: t }, opts) {
       });
     }
     function injectBranchCounter(childPath, locationIndex) {
-      if (childPath.isExpression()) {
-        const injectionExpr = makeBranchExpr({
-          fileIndex: t.numericLiteral(fileIndex),
-          branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(locationIndex),
-          originalExpr: childPath.node
-        });
-        childPath.replaceWith(injectionExpr);
+      const injectionExpr = makeBranchExpr({
+        fileIndex: t.numericLiteral(fileIndex),
+        branchIndex: t.numericLiteral(branchIndex),
+        branchLocationIndex: t.numericLiteral(locationIndex)
+      });
+      if (childPath.isSwitchCase()) {
+        childPath.node.consequent.unshift(t.expressionStatement(injectionExpr));
+      } else if (childPath.isExpression()) {
+        childPath.replaceWith(t.sequenceExpression([injectionExpr, childPath.node]));
+      } else if (childPath.isStatement()) {
+        childPath.insertBefore(t.expressionStatement(injectionExpr));
       } else {
-        const injectionStmt = makeBranchStmt({
-          fileIndex: t.numericLiteral(fileIndex),
-          branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(locationIndex)
-        });
-        childPath.insertBefore(injectionStmt);
+        console.error(`Unsupported branch type: ${childPath.type}`);
       }
     }
   }
@@ -38056,7 +38051,7 @@ function babelPlugin({ template, types: t }, opts) {
         registerBranch(path2, "if", childPaths);
       },
       SwitchStatement(path2, state) {
-        const childPaths = path2.get("cases").map((p) => p.get("consequent.0")).filter((p) => p?.node);
+        const childPaths = path2.get("cases");
         registerBranch(path2, "switch", childPaths);
       },
       LogicalExpression(path2, state) {
@@ -38154,6 +38149,7 @@ self.addEventListener("fetch", (event) => {
       if (fetchedETag) {
         const cachedResponse = await cache.match(event.request);
         if (cachedResponse && cachedResponse.headers.get("etag") === fetchedETag) {
+          return cachedResponse;
         }
       }
       const responseBytes = await response.arrayBuffer();

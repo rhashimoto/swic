@@ -285,6 +285,7 @@ describe("transpile", () => {
           break;
         default:
           foo = -2;
+          break;
       }
     `.trim();
 
@@ -312,7 +313,7 @@ describe("transpile", () => {
     await proxy(transpiled.code);
 
     const { counters } = await proxy('globalThis.__swic__');
-    expect(counters.get('/foo.js').b).toEqual([[1, 0]]);
+    expect(counters.get('/foo.js').b).toEqual([[1, 1, 0]]);
   });
 
   it("should count default parameter used branches", async () => {

@@ -17,6 +17,18 @@ export function foo() {
         return 1;
     }
 }
+switch (getRandomInt() % 8) {
+    case 1:
+    case 2:
+        'abc';
+        break;
+    case 3:
+        123;
+        break;
+    default:
+        'xyz';
+        break;
+}
 export function bar() {
     console.log("bar");
 }

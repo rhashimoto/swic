@@ -78,7 +78,7 @@ self.addEventListener("fetch", (event: FetchEvent) => {
       if (fetchedETag) {
         const cachedResponse = await cache.match(event.request);
         if (cachedResponse && cachedResponse.headers.get('etag') === fetchedETag) {
-          // return cachedResponse;
+          return cachedResponse;
         }
       }
       

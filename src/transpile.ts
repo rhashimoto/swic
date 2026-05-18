@@ -6,7 +6,7 @@ import { type CoverageMaps } from "./types/index.js";
 
 import { preamble } from "./injected.js";
 import { openIDB } from "./persistence.js";
-import { getSourceMap } from "./sourcemap.js";
+import { getSourceMap } from "./sourcemap";
 
 // esbuild isn't preserving setting `globalThis.Babel` as a side effect.
 // Strangely, importing the namespace works to get types in the IDE, but
@@ -88,11 +88,7 @@ export function babelPlugin(
   `);
 
   const makeBranchExpr = template.expression(`
-    (_swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++, %%originalExpr%%)
-  `);
-
-  const makeBranchStmt = template.statement(`
-    _swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++;
+    _swic_b[%%fileIndex%%][%%branchIndex%%][%%branchLocationIndex%%]++
   `);
 
   // There are many types of function nodes in the AST. They are all
@@ -228,23 +224,25 @@ export function babelPlugin(
     }
 
     function injectBranchCounter(childPath: any, locationIndex: number) {
-      if (childPath.isExpression()) {
-        // For expressions, we need to replace them with a sequence expression
-        // that includes the original expression and the instrumentation call.
-        const injectionExpr = makeBranchExpr({
-          fileIndex: t.numericLiteral(fileIndex),
-          branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(locationIndex),
-          originalExpr: childPath.node
-        });
-        childPath.replaceWith(injectionExpr);
+      const injectionExpr = makeBranchExpr({
+        fileIndex: t.numericLiteral(fileIndex),
+        branchIndex: t.numericLiteral(branchIndex),
+        branchLocationIndex: t.numericLiteral(locationIndex)
+      });
+      if (childPath.isSwitchCase()) {
+        // For a switch case, prepend the instrumentation call to the case
+        // code.
+        childPath.node.consequent.unshift(t.expressionStatement(injectionExpr));
+      } else if (childPath.isExpression()) {
+        // For expressions, use a sequence expression that ends with the
+        // original expression.
+        childPath.replaceWith(t.sequenceExpression([injectionExpr, childPath.node]));
+      } else if (childPath.isStatement()) {
+        // For statements, simply insert the instrumentation call before
+        // the statement.
+        childPath.insertBefore(t.expressionStatement(injectionExpr));
       } else {
-        const injectionStmt = makeBranchStmt({
-          fileIndex: t.numericLiteral(fileIndex),
-          branchIndex: t.numericLiteral(branchIndex),
-          branchLocationIndex: t.numericLiteral(locationIndex)
-        });
-        childPath.insertBefore(injectionStmt);
+        console.error(`Unsupported branch type: ${childPath.type}`);
       }
     }
   }
@@ -386,9 +384,7 @@ export function babelPlugin(
       },
 
       SwitchStatement(path: any, state: any) {
-        const childPaths = path.get('cases')
-          .map((p: any) => p.get('consequent.0'))
-          .filter((p: any) => p?.node);
+        const childPaths = path.get('cases');
         registerBranch(path, 'switch', childPaths);
       },
 

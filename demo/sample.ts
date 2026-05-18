@@ -1,3 +1,5 @@
+import { getSourceMap } from "../src/sourcemap";
+
 export function foo() {
   const randomInt = getRandomInt();
   console.log(`foo: ${randomInt}`);
@@ -12,6 +14,19 @@ export function foo() {
   } else {
     return 1;
   }
+}
+
+switch (getRandomInt() % 8) {
+  case 1:
+  case 2:
+    'abc';
+    break;
+  case 3:
+    123;
+    break;
+  default:
+    'xyz';
+    break;
 }
 
 export function bar() {
